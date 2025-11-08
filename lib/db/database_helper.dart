@@ -1,11 +1,8 @@
-import 'dart:async';
+import 'dart:io';
 import 'package:path/path.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart';
-
-import '../models/entry.dart';
-import '../models/work_title.dart';
-import '../models/tag.dart';
+import 'package:workon/models/entry.dart';
 
 class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._init();
@@ -15,12 +12,64 @@ class DatabaseHelper {
 
   Future<Database> get database async {
     if (_database != null) return _database!;
-    final dir = await getApplicationDocumentsDirectory();
-    final path = join(dir.path, 'workon.db');
-    _database = await openDatabase(path, version: 1, onCreate: _createTables);
+    _database = await _initDB('workon.db');
     return _database!;
   }
-  // Add these methods
+
+  Future<Database> _initDB(String fileName) async {
+    final dbPath = await getDatabasesPath();
+    final path = join(dbPath, fileName);
+
+    return await openDatabase(
+      path,
+      version: 2, // BUMP TO 2
+      onCreate: _createDB,
+      onUpgrade: _onUpgrade,
+    );
+  }
+
+  Future _createDB(Database db, int version) async {
+    await db.execute('''
+      CREATE TABLE entries (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        title TEXT NOT NULL,
+        description TEXT,
+        hours INTEGER NOT NULL,
+        minutes INTEGER NOT NULL,
+        date INTEGER NOT NULL,
+        tag TEXT
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE work_titles (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        tag TEXT
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE tags (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL UNIQUE
+      )
+    ''');
+  }
+
+  // MIGRATION: Add 'tag' column to existing tables
+  Future _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      await db.execute('ALTER TABLE entries ADD COLUMN tag TEXT');
+      await db.execute('ALTER TABLE work_titles ADD COLUMN tag TEXT');
+    }
+  }
+
+  // === ENTRIES ===
+  Future<int> insertEntry(WorkEntry entry) async {
+    final db = await database;
+    return await db.insert('entries', entry.toMap());
+  }
 
   Future<int> updateEntry(WorkEntry entry) async {
     final db = await database;
@@ -37,101 +86,46 @@ class DatabaseHelper {
     return await db.delete('entries', where: 'id = ?', whereArgs: [id]);
   }
 
-  Future<void> _createTables(Database db, int version) async {
-    // Entries table
-    await db.execute('''
-      CREATE TABLE entries (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        title TEXT NOT NULL,
-        description TEXT,
-        hours INTEGER NOT NULL,
-        minutes INTEGER NOT NULL,
-        date TEXT NOT NULL
-      )
-    ''');
-
-    // Work titles table
-    await db.execute('''
-      CREATE TABLE work_titles (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT UNIQUE NOT NULL,
-        tag TEXT
-      )
-    ''');
-
-    // Tags table (optional, for future use)
-    await db.execute('''
-      CREATE TABLE tags (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT UNIQUE NOT NULL,
-        color TEXT DEFAULT 'indigo'
-      )
-    ''');
-  }
-
-  // === ENTRY CRUD ===
-  Future<int> insertEntry(WorkEntry entry) async {
-    final db = await database;
-    return await db.insert('entries', entry.toMap());
-  }
-
   Future<List<WorkEntry>> getAllEntries() async {
     final db = await database;
     final maps = await db.query('entries', orderBy: 'date DESC');
     return maps.map((m) => WorkEntry.fromMap(m)).toList();
   }
 
-  Future<List<WorkEntry>> getEntriesByDate(DateTime date) async {
+  // === TITLES ===
+  Future<int> insertTitle(Map<String, dynamic> title) async {
     final db = await database;
-    final dateStr = date.toIso8601String().split('T')[0];
-    final maps = await db.query(
-      'entries',
-      where: 'date = ?',
-      whereArgs: [dateStr],
-      orderBy: 'id DESC',
+    return await db.insert('work_titles', title);
+  }
+
+  Future<int> updateTitle(Map<String, dynamic> title) async {
+    final db = await database;
+    return await db.update(
+      'work_titles',
+      title,
+      where: 'id = ?',
+      whereArgs: [title['id']],
     );
-    return maps.map((m) => WorkEntry.fromMap(m)).toList();
   }
 
-  // === WORK TITLE CRUD ===
-  Future<int> insertWorkTitle(WorkTitle title) async {
-    final db = await database;
-    return await db.insert('work_titles', title.toMap());
-  }
-
-  Future<List<WorkTitle>> getAllWorkTitles() async {
-    final db = await database;
-    final maps = await db.query('work_titles');
-    return maps.map((m) => WorkTitle.fromMap(m)).toList();
-  }
-
-  Future<int> deleteWorkTitle(int id) async {
+  Future<int> deleteTitle(int id) async {
     final db = await database;
     return await db.delete('work_titles', where: 'id = ?', whereArgs: [id]);
   }
 
-  // === TAG CRUD ===
-  Future<int> insertTag(Tag tag) async {
+  // === TAGS ===
+  Future<int> insertTag(String tag) async {
     final db = await database;
-    return await db.insert('tags', tag.toMap());
+    return await db.insert('tags', {'name': tag});
   }
 
-  Future<List<Tag>> getAllTags() async {
+  Future<int> deleteTag(String tag) async {
     final db = await database;
-    final maps = await db.query('tags');
-    return maps.map((m) => Tag.fromMap(m)).toList();
+    return await db.delete('tags', where: 'name = ?', whereArgs: [tag]);
   }
 
-  Future<int> deleteTag(int id) async {
+  Future<void> close() async {
     final db = await database;
-    return await db.delete('tags', where: 'id = ?', whereArgs: [id]);
-  }
-
-  // === UTILITY ===
-  Future<void> clearAllData() async {
-    final db = await database;
-    await db.delete('entries');
-    await db.delete('work_titles');
-    await db.delete('tags');
+    db.close();
   }
 }

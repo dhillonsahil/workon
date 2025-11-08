@@ -1,38 +1,42 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'screens/home_screen.dart';
 import 'providers/entry_provider.dart';
 import 'providers/title_provider.dart';
-import 'screens/home_screen.dart';
+import 'providers/stats_provider.dart'; // ADD THIS LINE
 
-void main() {
-  runApp(const WorkOnApp());
-}
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
 
-class WorkOnApp extends StatelessWidget {
-  const WorkOnApp({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return MultiProvider(
+  runApp(
+    MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => EntryProvider()),
         ChangeNotifierProvider(create: (_) => TitleProvider()),
+        ChangeNotifierProvider(
+          create: (_) => StatsProvider()..loadStats(),
+        ), // NOW VALID
       ],
-      child: MaterialApp(
-        title: 'WorkOn',
-        theme: ThemeData(
-          fontFamily: 'Inter',
-          primarySwatch: Colors.indigo,
-          scaffoldBackgroundColor: Colors.grey[50],
-          appBarTheme: const AppBarTheme(
-            backgroundColor: Colors.white,
-            foregroundColor: Colors.black87,
-            elevation: 0,
-          ),
-        ),
-        home: const HomeScreen(),
-        debugShowCheckedModeBanner: false,
+      child: const MyApp(),
+    ),
+  );
+}
+
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'WorkOn',
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(
+        primarySwatch: Colors.indigo,
+        useMaterial3: true,
+        fontFamily: 'Roboto',
+        scaffoldBackgroundColor: Colors.grey[50],
       ),
+      home: const HomeScreen(),
     );
   }
 }

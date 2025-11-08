@@ -1,36 +1,64 @@
-import 'package:flutter/material.dart';
-
-class Tag {
+class WorkEntry {
   final int? id;
-  final String name;
-  final String color; // e.g., "indigo", "green"
+  final String title;
+  final String description;
+  final int hours;
+  final int minutes;
+  final DateTime date;
+  final String? tag; // ADD THIS
 
-  Tag({this.id, required this.name, this.color = "indigo"});
+  WorkEntry({
+    this.id,
+    required this.title,
+    this.description = '',
+    required this.hours,
+    required this.minutes,
+    required this.date,
+    this.tag, // ADD THIS
+  });
 
   Map<String, dynamic> toMap() {
-    return {'id': id, 'name': name, 'color': color};
+    return {
+      'id': id,
+      'title': title,
+      'description': description,
+      'hours': hours,
+      'minutes': minutes,
+      'date': date.millisecondsSinceEpoch,
+      'tag': tag, // ADD THIS
+    };
   }
 
-  factory Tag.fromMap(Map<String, dynamic> map) {
-    return Tag(
+  static WorkEntry fromMap(Map<String, dynamic> map) {
+    return WorkEntry(
       id: map['id'],
-      name: map['name'],
-      color: map['color'] ?? "indigo",
+      title: map['title'],
+      description: map['description'] ?? '',
+      hours: map['hours'],
+      minutes: map['minutes'],
+      date: DateTime.fromMillisecondsSinceEpoch(map['date']),
+      tag: map['tag'], // ADD THIS
     );
   }
 
-  Color get colorValue {
-    switch (color) {
-      case 'red':
-        return Colors.red;
-      case 'green':
-        return Colors.green;
-      case 'blue':
-        return Colors.blue;
-      case 'yellow':
-        return Colors.amber;
-      default:
-        return Colors.indigo;
-    }
+  // ADD copyWith
+  WorkEntry copyWith({
+    int? id,
+    String? title,
+    String? description,
+    int? hours,
+    int? minutes,
+    DateTime? date,
+    String? tag,
+  }) {
+    return WorkEntry(
+      id: id ?? this.id,
+      title: title ?? this.title,
+      description: description ?? this.description,
+      hours: hours ?? this.hours,
+      minutes: minutes ?? this.minutes,
+      date: date ?? this.date,
+      tag: tag ?? this.tag,
+    );
   }
 }

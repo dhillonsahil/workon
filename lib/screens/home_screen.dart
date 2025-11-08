@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:workon/screens/titles_tags_screen.dart';
 import '../providers/entry_provider.dart';
 import '../providers/title_provider.dart';
 import '../models/work_title.dart';
@@ -47,9 +48,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         elevation: 1,
         actions: [
           IconButton(
-            icon: const Icon(Icons.list_alt),
-            tooltip: "Work Titles",
-            onPressed: () => _showAddTitleDialog(context),
+            icon: const Icon(Icons.title),
+            tooltip: "Titles & Tags",
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const TitlesTagsScreen()),
+            ),
           ),
           IconButton(
             icon: const Icon(Icons.settings),

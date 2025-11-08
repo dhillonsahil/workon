@@ -5,14 +5,16 @@ class WorkEntry {
   final int hours;
   final int minutes;
   final DateTime date;
+  final String? tag;
 
   WorkEntry({
     this.id,
     required this.title,
-    required this.description,
+    this.description = '',
     required this.hours,
     required this.minutes,
     required this.date,
+    this.tag,
   });
 
   Map<String, dynamic> toMap() {
@@ -22,27 +24,28 @@ class WorkEntry {
       'description': description,
       'hours': hours,
       'minutes': minutes,
-      'date': date.toIso8601String().split('T')[0],
+      'date': date.millisecondsSinceEpoch,
+      'tag': tag,
     };
   }
 
-  factory WorkEntry.fromMap(Map<String, dynamic> map) {
+  static WorkEntry fromMap(Map<String, dynamic> map) {
     return WorkEntry(
       id: map['id'],
       title: map['title'],
-      description: map['description'],
+      description: map['description'] ?? '',
       hours: map['hours'],
       minutes: map['minutes'],
-      date: DateTime.parse(map['date']),
+      date: DateTime.fromMillisecondsSinceEpoch(map['date']),
+      tag: map['tag'],
     );
   }
 
-  int get totalMinutes => hours * 60 + minutes;
-
+  // ADD THIS GETTER
   String get formattedTime {
     final h = hours > 0 ? '${hours}h ' : '';
     final m = minutes > 0 ? '${minutes}m' : '';
-    return (h + m).trim();
+    return h + m;
   }
 
   WorkEntry copyWith({
@@ -52,6 +55,7 @@ class WorkEntry {
     int? hours,
     int? minutes,
     DateTime? date,
+    String? tag,
   }) {
     return WorkEntry(
       id: id ?? this.id,
@@ -60,6 +64,7 @@ class WorkEntry {
       hours: hours ?? this.hours,
       minutes: minutes ?? this.minutes,
       date: date ?? this.date,
+      tag: tag ?? this.tag,
     );
   }
 }

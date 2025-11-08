@@ -1,100 +1,186 @@
+// class WorkEntry {
+//   final int? id;
+//   final String title;
+//   final String description;
+//   final int hours;
+//   final int minutes;
+//   final DateTime date;
+//   final String? tag;
+
+//   WorkEntry({
+//     this.id,
+//     required this.title,
+//     this.description = '',
+//     required this.hours,
+//     required this.minutes,
+//     required this.date,
+//     this.tag,
+//   });
+
+//   // ... toMap(), fromMap(), copyWith(), formattedTime
+// }
+// lib/providers/stats_provider.dart
 import 'package:flutter/material.dart';
+import '../db/database_helper.dart';
 import '../models/entry.dart';
-import 'entry_provider.dart';
 
-class StatsProvider with ChangeNotifier {
-  final EntryProvider entryProvider;
+class StatsProvider extends ChangeNotifier {
+  List<WorkEntry> _allEntries = [];
+  bool _isLoading = true;
 
-  DateTime _selectedMonth = DateTime.now();
-  DateTime get selectedMonth => _selectedMonth;
+  List<WorkEntry> get allEntries => _allEntries;
+  bool get isLoading => _isLoading;
 
-  StatsProvider(this.entryProvider) {
-    entryProvider.addListener(_onEntriesChanged);
+  int get totalEntries => _allEntries.length;
+  int get totalHours => _allEntries.fold(0, (sum, e) => sum + e.hours);
+  int get totalMinutes => _allEntries.fold(0, (sum, e) => sum + e.minutes);
+  double get totalTimeInHours => totalHours + (totalMinutes / 60);
+
+  int get todayMinutes {
+    final today = DateTime.now();
+    return _entriesOnDate(
+      today,
+    ).fold(0, (sum, e) => sum + e.hours * 60 + e.minutes);
   }
 
-  void _onEntriesChanged() => notifyListeners();
-
-  void setMonth(DateTime month) {
-    _selectedMonth = DateTime(month.year, month.month);
-    notifyListeners();
+  int get thisWeekMinutes {
+    final now = DateTime.now();
+    final start = now.subtract(Duration(days: now.weekday - 1));
+    return _entriesInRange(
+      start,
+      now,
+    ).fold(0, (sum, e) => sum + e.hours * 60 + e.minutes);
   }
-
-  // === STATS GETTERS ===
-  int get totalMinutes => entryProvider.totalMinutesForMonth(
-    _selectedMonth.year,
-    _selectedMonth.month,
-  );
-
-  int get dailyAverage {
-    final daysInMonth = DateTime(
-      _selectedMonth.year,
-      _selectedMonth.month + 1,
-      0,
-    ).day;
-    final activeDays = _activeStudyDays().length;
-    return activeDays == 0 ? 0 : totalMinutes ~/ activeDays;
-  }
-
-  int get longestStreak => _calculateLongestStreak();
 
   int get currentStreak {
-    final today = DateTime.now();
-    final studyDates = _getStudyDates();
+    if (_allEntries.isEmpty) return 0;
+    final sortedDates = _getUniqueDatesDescending();
     int streak = 0;
-    var checkDate = today;
+    final today = DateTime(
+      DateTime.now().year,
+      DateTime.now().month,
+      DateTime.now().day,
+    );
 
-    while (studyDates.contains(_formatDate(checkDate))) {
-      streak++;
-      checkDate = checkDate.subtract(const Duration(days: 1));
+    for (final date in sortedDates) {
+      final normalized = DateTime(date.year, date.month, date.day);
+      final expected = today.subtract(Duration(days: streak));
+      if (normalized == expected) {
+        streak++;
+      } else {
+        break;
+      }
     }
     return streak;
   }
 
-  Map<String, int> get perTitleMinutes => entryProvider.getTitleMinutesForMonth(
-    _selectedMonth.year,
-    _selectedMonth.month,
-  );
+  int get longestStreak {
+    if (_allEntries.isEmpty) return 0;
+    final dates = _getUniqueDatesAscending();
+    if (dates.length <= 1) return dates.length;
 
-  List<DateTime> _activeStudyDays() {
-    final Set<String> dates = {};
-    for (final e in entryProvider.entries) {
-      if (e.date.year == _selectedMonth.year &&
-          e.date.month == _selectedMonth.month) {
-        dates.add(_formatDate(e.date));
-      }
-    }
-    return dates.map(DateTime.parse).toList()..sort();
-  }
-
-  Set<String> _getStudyDates() {
-    return entryProvider.entries.map((e) => _formatDate(e.date)).toSet();
-  }
-
-  int _calculateLongestStreak() {
-    final dates = _getStudyDates();
-    if (dates.isEmpty) return 0;
-
-    final sorted = dates.map(DateTime.parse).toList()..sort();
     int maxStreak = 1;
     int current = 1;
-
-    for (int i = 1; i < sorted.length; i++) {
-      final diff = sorted[i].difference(sorted[i - 1]).inDays;
-      if (diff == 1) {
+    for (int i = 1; i < dates.length; i++) {
+      if (dates[i].difference(dates[i - 1]).inDays == 1) {
         current++;
         maxStreak = current > maxStreak ? current : maxStreak;
-      } else if (diff > 1) {
+      } else {
         current = 1;
       }
     }
     return maxStreak;
   }
 
-  String _formatDate(DateTime d) => d.toIso8601String().split('T')[0];
+  String? get mostUsedTag {
+    final map = <String, int>{};
+    for (final e in _allEntries) {
+      if (e.tag != null) map[e.tag!] = (map[e.tag!] ?? 0) + 1;
+    }
+    if (map.isEmpty) return null;
+    return map.entries.reduce((a, b) => a.value > b.value ? a : b).key;
+  }
 
-  @override
-  void dispose() {
-    entryProvider.removeListener(_onEntriesChanged);
-    super.dispose();
+  Future<void> loadStats() async {
+    _isLoading = true;
+    notifyListeners();
+    try {
+      final entries = await DatabaseHelper.instance.getAllEntries();
+      _allEntries = entries;
+    } catch (e) {
+      debugPrint("Stats load error: $e");
+    }
+    _isLoading = false;
+    notifyListeners();
+  }
+
+  // FIXED: Use 'end' instead of 'e'
+  List<WorkEntry> _entriesInRange(DateTime start, DateTime end) {
+    final s = DateTime(start.year, start.month, start.day);
+    final e = DateTime(
+      end.year,
+      end.month,
+      end.day,
+    ).add(const Duration(days: 1));
+    return _allEntries
+        .where((entry) => entry.date.isAfter(s) && entry.date.isBefore(e))
+        .toList();
+  }
+
+  List<WorkEntry> _entriesOnDate(DateTime date) {
+    final d = DateTime(date.year, date.month, date.day);
+    return _allEntries
+        .where((e) => DateTime(e.date.year, e.date.month, e.date.day) == d)
+        .toList();
+  }
+
+  List<DateTime> _getUniqueDatesAscending() {
+    final set = <DateTime>{};
+    for (final e in _allEntries) {
+      set.add(DateTime(e.date.year, e.date.month, e.date.day));
+    }
+    final list = set.toList()..sort();
+    return list;
+  }
+
+  List<DateTime> _getUniqueDatesDescending() {
+    return _getUniqueDatesAscending().reversed.toList();
+  }
+
+  Map<String, int> get tagDistribution {
+    final map = <String, int>{};
+    for (final e in _allEntries) {
+      final tag = e.tag ?? 'None';
+      map[tag] = (map[tag] ?? 0) + 1;
+    }
+    return map;
+  }
+
+  List<Map<String, dynamic>> get weeklyData {
+    final now = DateTime.now();
+    final data = <Map<String, dynamic>>[];
+    for (int i = 6; i >= 0; i--) {
+      final date = now.subtract(Duration(days: i));
+      final minutes = _entriesOnDate(
+        date,
+      ).fold(0, (sum, e) => sum + e.hours * 60 + e.minutes);
+      data.add({'day': _dayAbbr(date.weekday), 'minutes': minutes});
+    }
+    return data;
+  }
+
+  // THIS MONTH ← MISSING BEFORE!
+  int get thisMonthMinutes {
+    final now = DateTime.now();
+    final start = DateTime(now.year, now.month, 1);
+    return _entriesInRange(
+      start,
+      now,
+    ).fold(0, (sum, e) => sum + e.hours * 60 + e.minutes);
+  }
+
+  String _dayAbbr(int weekday) {
+    const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    return days[weekday - 1];
   }
 }

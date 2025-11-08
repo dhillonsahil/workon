@@ -4,7 +4,6 @@ import '../models/entry.dart';
 import '../models/work_title.dart';
 import '../providers/entry_provider.dart';
 import '../providers/title_provider.dart';
-import '../widgets/time_picker_lock.dart';
 import '../db/database_helper.dart';
 
 class AddEntryDialog extends StatefulWidget {
@@ -23,10 +22,9 @@ class _AddEntryDialogState extends State<AddEntryDialog> {
   int _hours = 0;
   int _minutes = 0;
   WorkTitle? _selectedTitle;
+  String? _selectedTag;
 
   late DateTime _selectedDate;
-
-  // ADD CONTROLLERS
   late FixedExtentScrollController _hourController;
   late FixedExtentScrollController _minuteController;
 
@@ -34,8 +32,6 @@ class _AddEntryDialogState extends State<AddEntryDialog> {
   void initState() {
     super.initState();
     _selectedDate = widget.date ?? DateTime.now();
-
-    // Initialize controllers
     _hourController = FixedExtentScrollController(initialItem: _hours);
     _minuteController = FixedExtentScrollController(initialItem: _minutes);
 
@@ -46,8 +42,7 @@ class _AddEntryDialogState extends State<AddEntryDialog> {
       _hours = e.hours;
       _minutes = e.minutes;
       _selectedTitle = context.read<TitleProvider>().getTitleByName(e.title);
-
-      // Update controllers
+      _selectedTag = e.tag; // NOW VALID
       _hourController.jumpToItem(_hours);
       _minuteController.jumpToItem(_minutes);
     }
@@ -63,6 +58,7 @@ class _AddEntryDialogState extends State<AddEntryDialog> {
   @override
   Widget build(BuildContext context) {
     final titles = context.watch<TitleProvider>().titles;
+    final tags = context.watch<TitleProvider>().tags;
     final isEdit = widget.entryToEdit != null;
 
     return AlertDialog(
@@ -76,6 +72,7 @@ class _AddEntryDialogState extends State<AddEntryDialog> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              // QUICK SELECT TITLE
               if (titles.isNotEmpty)
                 DropdownButtonFormField<WorkTitle>(
                   value: _selectedTitle,
@@ -86,11 +83,18 @@ class _AddEntryDialogState extends State<AddEntryDialog> {
                       )
                       .toList(),
                   onChanged: (t) {
-                    setState(() => _selectedTitle = t);
-                    if (t != null) _titleCtrl.text = t.name;
+                    setState(() {
+                      _selectedTitle = t;
+                      if (t != null) {
+                        _titleCtrl.text = t.name;
+                        _selectedTag = t.tag;
+                      }
+                    });
                   },
                 ),
               const SizedBox(height: 12),
+
+              // TITLE
               TextField(
                 controller: _titleCtrl,
                 decoration: const InputDecoration(
@@ -99,6 +103,8 @@ class _AddEntryDialogState extends State<AddEntryDialog> {
                 ),
               ),
               const SizedBox(height: 12),
+
+              // DESCRIPTION
               TextField(
                 controller: _descCtrl,
                 decoration: const InputDecoration(
@@ -107,7 +113,29 @@ class _AddEntryDialogState extends State<AddEntryDialog> {
                 ),
                 maxLines: 3,
               ),
+              const SizedBox(height: 12),
+
+              // TAG DROPDOWN
+              DropdownButtonFormField<String>(
+                value: _selectedTag,
+                decoration: const InputDecoration(labelText: "Tag"),
+                items:
+                    tags
+                        .map(
+                          (t) => DropdownMenuItem(value: t, child: Text("#$t")),
+                        )
+                        .toList()
+                      ..add(
+                        const DropdownMenuItem(
+                          value: null,
+                          child: Text("None"),
+                        ),
+                      ),
+                onChanged: (t) => setState(() => _selectedTag = t),
+              ),
               const SizedBox(height: 20),
+
+              // TIME PICKER
               const Text(
                 "Time Studied *",
                 style: TextStyle(fontWeight: FontWeight.w600),
@@ -116,7 +144,7 @@ class _AddEntryDialogState extends State<AddEntryDialog> {
               Row(
                 children: [
                   Expanded(
-                    child: _buildLabeledWheel(
+                    child: _buildWheel(
                       "Hours",
                       _hourController,
                       0,
@@ -126,7 +154,7 @@ class _AddEntryDialogState extends State<AddEntryDialog> {
                   ),
                   const SizedBox(width: 16),
                   Expanded(
-                    child: _buildLabeledWheel(
+                    child: _buildWheel(
                       "Minutes",
                       _minuteController,
                       0,
@@ -153,8 +181,7 @@ class _AddEntryDialogState extends State<AddEntryDialog> {
     );
   }
 
-  // REFACTORED WHEEL BUILDER
-  Widget _buildLabeledWheel(
+  Widget _buildWheel(
     String label,
     FixedExtentScrollController controller,
     int min,
@@ -172,9 +199,9 @@ class _AddEntryDialogState extends State<AddEntryDialog> {
             controller: controller,
             itemExtent: 40,
             physics: const FixedExtentScrollPhysics(),
-            onSelectedItemChanged: (index) {
-              onChange(index);
-              setState(() {}); // Trigger rebuild to update button state
+            onSelectedItemChanged: (i) {
+              onChange(i);
+              setState(() {});
             },
             childDelegate: ListWheelChildBuilderDelegate(
               builder: (ctx, i) {
@@ -221,6 +248,7 @@ class _AddEntryDialogState extends State<AddEntryDialog> {
       hours: _hours,
       minutes: _minutes,
       date: _selectedDate,
+      tag: _selectedTag, // NOW VALID
     );
 
     if (widget.entryToEdit != null) {
@@ -230,7 +258,7 @@ class _AddEntryDialogState extends State<AddEntryDialog> {
     }
 
     context.read<EntryProvider>().loadEntries();
-    Navigator.pop(context);
+    if (mounted) Navigator.pop(context);
   }
 
   String _formatDate(DateTime d) => '${d.day}/${d.month}/${d.year}';

@@ -1,90 +1,171 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../providers/entry_provider.dart';
-import '../providers/stats_provider.dart';
-import '../utils/time_utils.dart';
-import '../widgets/month_picker.dart';
 import 'package:fl_chart/fl_chart.dart';
+import '../providers/stats_provider.dart';
+import '../utils/export_import.dart';
 
-class StatsScreen extends StatelessWidget {
+class StatsScreen extends StatefulWidget {
   const StatsScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (_) =>
-          StatsProvider(Provider.of<EntryProvider>(context, listen: false)),
-      child: const _StatsScreenContent(),
-    );
-  }
+  State<StatsScreen> createState() => _StatsScreenState();
 }
 
-class _StatsScreenContent extends StatelessWidget {
-  const _StatsScreenContent();
+class _StatsScreenState extends State<StatsScreen> {
+  @override
+  void initState() {
+    super.initState();
+    Future.microtask(() => context.read<StatsProvider>().loadStats());
+  }
 
   @override
   Widget build(BuildContext context) {
-    final stats = context.watch<StatsProvider>();
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          MonthPicker(
-            selectedMonth: stats.selectedMonth,
-            onMonthChanged: (m) => context.read<StatsProvider>().setMonth(m),
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text(
+          "Stats",
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        centerTitle: true,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.upload_file),
+            tooltip: "Import",
+            onPressed: () => ExportImport.importData(context),
           ),
-          const SizedBox(height: 20),
-
-          _buildSummaryCard(stats),
-          const SizedBox(height: 16),
-
-          _buildBarChart(context, stats), // Pass context
-          const SizedBox(height: 16),
-
-          _buildPerTitleCard(stats.perTitleMinutes),
+          IconButton(
+            icon: const Icon(Icons.download),
+            tooltip: "Export",
+            onPressed: () => ExportImport.exportData(context),
+          ),
         ],
+      ),
+      body: Consumer<StatsProvider>(
+        builder: (context, stats, child) {
+          if (stats.isLoading) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          if (stats.totalEntries == 0) {
+            return const Center(
+              child: Text(
+                "No data yet.\nStart logging to see stats!",
+                textAlign: TextAlign.center,
+              ),
+            );
+          }
+
+          return SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // STREAK CARD
+                _buildStreakCard(stats),
+
+                const SizedBox(height: 16),
+
+                // TIME SUMMARY
+                _buildTimeSummary(stats),
+
+                const SizedBox(height: 24),
+
+                // WEEKLY CHART
+                _buildWeeklyChart(stats),
+
+                const SizedBox(height: 24),
+
+                // TAG PIE CHART
+                if (stats.tagDistribution.isNotEmpty) _buildTagChart(stats),
+
+                const SizedBox(height: 16),
+              ],
+            ),
+          );
+        },
       ),
     );
   }
 
-  Widget _buildSummaryCard(StatsProvider stats) {
+  Widget _buildStreakCard(StatsProvider stats) {
     return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      elevation: 3,
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(20),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              "Monthly Summary",
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            const Icon(
+              Icons.local_fire_department,
+              size: 48,
+              color: Colors.orange,
             ),
-            const Divider(height: 20),
-            _statRow("Total Time", formatMinutes(stats.totalMinutes)),
-            _statRow("Daily Average", formatMinutes(stats.dailyAverage)),
-            _statRow("Longest Streak", "${stats.longestStreak} days"),
-            _statRow("Current Streak", "${stats.currentStreak} days"),
+            const SizedBox(height: 12),
+            Text(
+              "${stats.currentStreak}",
+              style: const TextStyle(
+                fontSize: 48,
+                fontWeight: FontWeight.bold,
+                color: Colors.orange,
+              ),
+            ),
+            const Text(
+              "Current Streak",
+              style: TextStyle(fontSize: 16, color: Colors.grey),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              "Longest: ${stats.longestStreak} days",
+              style: const TextStyle(fontSize: 14, color: Colors.grey),
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _statRow(String label, String value) {
+  Widget _buildTimeSummary(StatsProvider stats) {
+    return Card(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            _summaryRow(
+              "Total Time",
+              "${stats.totalTimeInHours.toStringAsFixed(1)}h",
+            ),
+            const Divider(height: 20),
+            _summaryRow("Today", _formatMinutes(stats.todayMinutes)),
+            _summaryRow("This Week", _formatMinutes(stats.thisWeekMinutes)),
+            _summaryRow("This Month", _formatMinutes(stats.thisMonthMinutes)),
+            if (stats.mostUsedTag != null) ...[
+              const Divider(height: 20),
+              _summaryRow(
+                "Top Tag",
+                "#${stats.mostUsedTag}",
+                color: Colors.indigo,
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _summaryRow(String label, String value, {Color? color}) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
+      padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: const TextStyle(color: Colors.black87)),
+          Text(label, style: const TextStyle(fontSize: 15)),
           Text(
             value,
-            style: const TextStyle(
+            style: TextStyle(
+              fontSize: 16,
               fontWeight: FontWeight.w600,
-              color: Colors.indigo,
+              color: color,
             ),
           ),
         ],
@@ -92,60 +173,71 @@ class _StatsScreenContent extends StatelessWidget {
     );
   }
 
-  Widget _buildBarChart(BuildContext context, StatsProvider stats) {
-    final entryProvider = Provider.of<EntryProvider>(context, listen: false);
-    final year = stats.selectedMonth.year;
-    final month = stats.selectedMonth.month;
-    final daysInMonth = DateTime(year, month + 1, 0).day;
-
-    final data = List.generate(daysInMonth, (day) {
-      final date = DateTime(year, month, day + 1);
-      final minutes = entryProvider.totalMinutesForDate(date);
-      return BarChartGroupData(
-        x: day,
-        barRods: [
-          BarChartRodData(
-            toY: minutes / 60.0,
-            color: minutes > 0 ? Colors.indigo : Colors.grey[300],
-            width: 12,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
-          ),
-        ],
-      );
-    });
+  Widget _buildWeeklyChart(StatsProvider stats) {
+    final data = stats.weeklyData;
+    final maxY = data
+        .map((e) => e['minutes'] as int)
+        .reduce((a, b) => a > b ? a : b)
+        .toDouble();
+    final interval = maxY > 60 ? (maxY / 5).ceilToDouble() : 15.0;
 
     return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              "Daily Progress",
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              "This Week",
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 16),
             SizedBox(
               height: 200,
               child: BarChart(
                 BarChartData(
                   alignment: BarChartAlignment.spaceAround,
-                  maxY: 10,
+                  maxY: maxY + interval,
+                  barTouchData: BarTouchData(
+                    enabled: true,
+                    touchTooltipData: BarTouchTooltipData(
+                      getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                        final minutes = data[group.x]['minutes'] as int;
+                        return BarTooltipItem(
+                          _formatMinutes(minutes),
+                          const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        );
+                      },
+                    ),
+                  ),
                   titlesData: FlTitlesData(
                     leftTitles: AxisTitles(
                       sideTitles: SideTitles(
                         showTitles: true,
-                        getTitlesWidget: (value, meta) =>
-                            Text('${value.toInt()}h'),
+                        interval: interval,
+                        getTitlesWidget: (value, meta) => Text(
+                          '${value.toInt()}m',
+                          style: const TextStyle(fontSize: 10),
+                        ),
                       ),
                     ),
                     bottomTitles: AxisTitles(
                       sideTitles: SideTitles(
                         showTitles: true,
-                        getTitlesWidget: (value, meta) =>
-                            Text('${value.toInt() + 1}'),
+                        getTitlesWidget: (value, meta) {
+                          final index = value.toInt();
+                          if (index < data.length) {
+                            return Text(
+                              data[index]['day'],
+                              style: const TextStyle(fontSize: 12),
+                            );
+                          }
+                          return const Text('');
+                        },
                       ),
                     ),
                     topTitles: const AxisTitles(
@@ -155,9 +247,25 @@ class _StatsScreenContent extends StatelessWidget {
                       sideTitles: SideTitles(showTitles: false),
                     ),
                   ),
-                  borderData: FlBorderData(show: false),
                   gridData: const FlGridData(show: true),
-                  barGroups: data,
+                  borderData: FlBorderData(show: false),
+                  barGroups: data.asMap().entries.map((e) {
+                    final index = e.key;
+                    final minutes = e.value['minutes'] as int;
+                    return BarChartGroupData(
+                      x: index,
+                      barRods: [
+                        BarChartRodData(
+                          toY: minutes.toDouble(),
+                          color: Colors.indigo,
+                          width: 16,
+                          borderRadius: const BorderRadius.vertical(
+                            top: Radius.circular(6),
+                          ),
+                        ),
+                      ],
+                    );
+                  }).toList(),
                 ),
               ),
             ),
@@ -167,47 +275,45 @@ class _StatsScreenContent extends StatelessWidget {
     );
   }
 
-  Widget _buildPerTitleCard(Map<String, int> titleMinutes) {
-    if (titleMinutes.isEmpty) {
-      return const Card(
-        child: Padding(
-          padding: EdgeInsets.all(16),
-          child: Text("No data for this month."),
-        ),
-      );
-    }
-
-    final sorted = titleMinutes.entries.toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
+  Widget _buildTagChart(StatsProvider stats) {
+    final distribution = stats.tagDistribution;
+    final entries = distribution.entries.toList();
 
     return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              "Per Title",
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              "Tag Distribution",
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
-            const SizedBox(height: 12),
-            ...sorted.map(
-              (e) => Padding(
-                padding: const EdgeInsets.symmetric(vertical: 6),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      e.key,
-                      style: const TextStyle(fontWeight: FontWeight.w500),
-                    ),
-                    Text(
-                      formatMinutes(e.value),
-                      style: const TextStyle(color: Colors.indigo),
-                    ),
-                  ],
+            const SizedBox(height: 16),
+            SizedBox(
+              height: 200,
+              child: PieChart(
+                PieChartData(
+                  sections: entries.asMap().entries.map((e) {
+                    final index = e.key;
+                    final tag = e.value.key;
+                    final count = e.value.value;
+                    final percentage = (count / stats.totalEntries) * 100;
+                    return PieChartSectionData(
+                      value: count.toDouble(),
+                      title: '$tag\n${percentage.toStringAsFixed(0)}%',
+                      color: _tagColor(index),
+                      radius: 60,
+                      titleStyle: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    );
+                  }).toList(),
+                  centerSpaceRadius: 30,
+                  sectionsSpace: 2,
                 ),
               ),
             ),
@@ -215,5 +321,25 @@ class _StatsScreenContent extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Color _tagColor(int index) {
+    const colors = [
+      Colors.indigo,
+      Colors.orange,
+      Colors.green,
+      Colors.purple,
+      Colors.teal,
+      Colors.red,
+      Colors.blue,
+    ];
+    return colors[index % colors.length];
+  }
+
+  String _formatMinutes(int minutes) {
+    if (minutes == 0) return "0m";
+    final h = minutes ~/ 60;
+    final m = minutes % 60;
+    return "${h > 0 ? '${h}h ' : ''}${m}m";
   }
 }

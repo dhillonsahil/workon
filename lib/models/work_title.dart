@@ -21,4 +21,13 @@ class WorkTitle {
 
   @override
   int get hashCode => id.hashCode ^ name.hashCode;
+
+  // ADD THIS METHOD
+  WorkTitle copyWith({int? id, String? name, String? tag}) {
+    return WorkTitle(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      tag: tag ?? this.tag,
+    );
+  }
 }
