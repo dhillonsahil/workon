@@ -1,6 +1,8 @@
+// lib/screens/stats_screen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:workon/models/entry.dart';
 import '../providers/stats_provider.dart';
 import '../utils/export_import.dart';
 
@@ -12,11 +14,21 @@ class StatsScreen extends StatefulWidget {
 }
 
 class _StatsScreenState extends State<StatsScreen> {
+  DateTime _selectedDate = DateTime.now();
+
   @override
   void initState() {
     super.initState();
     Future.microtask(() => context.read<StatsProvider>().loadStats());
   }
+
+  DateTime get _weekStart =>
+      _selectedDate.subtract(Duration(days: _selectedDate.weekday - 1));
+  DateTime get _weekEnd => _weekStart.add(const Duration(days: 6));
+  DateTime get _monthStart =>
+      DateTime(_selectedDate.year, _selectedDate.month, 1);
+  DateTime get _monthEnd =>
+      DateTime(_selectedDate.year, _selectedDate.month + 1, 0);
 
   @override
   Widget build(BuildContext context) {
@@ -30,59 +42,155 @@ class _StatsScreenState extends State<StatsScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.upload_file),
-            tooltip: "Import",
             onPressed: () => ExportImport.importData(context),
           ),
           IconButton(
             icon: const Icon(Icons.download),
-            tooltip: "Export",
             onPressed: () => ExportImport.exportData(context),
           ),
         ],
       ),
       body: Consumer<StatsProvider>(
         builder: (context, stats, child) {
-          if (stats.isLoading) {
+          if (stats.isLoading)
             return const Center(child: CircularProgressIndicator());
-          }
 
-          if (stats.totalEntries == 0) {
-            return const Center(
-              child: Text(
-                "No data yet.\nStart logging to see stats!",
-                textAlign: TextAlign.center,
-              ),
-            );
-          }
+          // final weekEntries = stats.entriesInRange(_weekStart, _weekEnd);
+          // final monthEntries = stats.entriesInRange(_monthStart, _monthEnd);
+          // final todayEntries = stats.entriesOnDate(_selectedDate);
+          // final isToday = _isSameDay(_selectedDate, DateTime.now());
+
+          // final weekMinutes = _totalMinutes(weekEntries);
+          // final monthMinutes = _totalMinutes(monthEntries);
+          // final todayMinutes = _totalMinutes(todayEntries);
+          final weekEntries = stats.entriesInRange(_weekStart, _weekEnd);
+          final monthEntries = stats.entriesInRange(_monthStart, _monthEnd);
+          final todayEntries = stats.entriesOnDate(_selectedDate);
+          final isToday = _isSameDay(_selectedDate, DateTime.now());
+
+          final todayMinutes = _totalMinutes(todayEntries);
+          final weekMinutes = _totalMinutes(weekEntries);
+          final monthMinutes = _totalMinutes(monthEntries);
 
           return SingleChildScrollView(
             padding: const EdgeInsets.all(16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // STREAK CARD
+                // DATE PICKER + INFO
+                _buildDatePicker(stats),
+
+                const SizedBox(height: 16),
+
+                // STREAK
                 _buildStreakCard(stats),
 
                 const SizedBox(height: 16),
 
                 // TIME SUMMARY
-                _buildTimeSummary(stats),
+                _buildTimeSummary(
+                  isToday: isToday,
+                  todayMinutes: todayMinutes,
+                  weekMinutes: weekMinutes,
+                  monthMinutes: monthMinutes,
+                  stats: stats,
+                  todayEntries: todayEntries,
+                  weekEntries: weekEntries,
+                  monthEntries: monthEntries,
+                ),
 
                 const SizedBox(height: 24),
 
-                // WEEKLY CHART
+                // WEEKLY BAR CHART (HOURS)
                 _buildWeeklyChart(stats),
 
                 const SizedBox(height: 24),
 
+                // PER-TITLE TIME
+                _buildPerTitleTime("This Week", weekEntries),
+                const SizedBox(height: 16),
+                _buildPerTitleTime("This Month", monthEntries),
+                if (isToday) ...[
+                  const SizedBox(height: 16),
+                  _buildPerTitleTime("Today", todayEntries),
+                ],
+
+                const SizedBox(height: 24),
+
+                // PER-TAG TIME
+                _buildPerTagTime("This Week", weekEntries),
+                const SizedBox(height: 16),
+                _buildPerTagTime("This Month", monthEntries),
+                if (isToday) ...[
+                  const SizedBox(height: 16),
+                  _buildPerTagTime("Today", todayEntries),
+                ],
+
+                const SizedBox(height: 24),
+
                 // TAG PIE CHART
-                if (stats.tagDistribution.isNotEmpty) _buildTagChart(stats),
+                if (stats.tagDistributionIn(weekEntries).isNotEmpty)
+                  _buildTagChart(stats, weekEntries),
 
                 const SizedBox(height: 16),
               ],
             ),
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildDatePicker(StatsProvider stats) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          children: [
+            InkWell(
+              onTap: () async {
+                final picked = await showDatePicker(
+                  context: context,
+                  initialDate: _weekStart, // Force Monday
+                  firstDate: DateTime(2020),
+                  lastDate: DateTime.now(),
+                  selectableDayPredicate: (date) =>
+                      date.weekday == DateTime.monday,
+                  helpText: "Select Monday to view full week",
+                );
+                if (picked != null) {
+                  setState(() {
+                    _selectedDate = picked;
+                    // _weekStart is auto-calculated from picked Monday
+                  });
+                }
+              },
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.calendar_today, color: Colors.indigo),
+                  const SizedBox(width: 8),
+                  Text(
+                    "${_formatDate(_selectedDate)}",
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              "Week: ${_formatWeek(_weekStart)} (Mon–Sun)",
+              style: const TextStyle(fontSize: 13, color: Colors.grey),
+            ),
+            const Text(
+              "Select any date → shows full week starting Monday",
+              style: TextStyle(fontSize: 11, color: Colors.grey),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -124,62 +232,148 @@ class _StatsScreenState extends State<StatsScreen> {
     );
   }
 
-  Widget _buildTimeSummary(StatsProvider stats) {
+  double _roundToNearestEven(double value) {
+    final rounded = ((value / 2).ceil() * 2).toDouble(); // FORCE DOUBLE
+    return rounded > 0 ? rounded : 2.0;
+  }
+
+  // double _roundToNearestEven(double value) {
+  //   final half = value / 2.0;
+  //   final roundedHalf = half.ceil();
+  //   final result = roundedHalf * 2.0;
+  //   return result > 0 ? result : 2.0;
+  // }
+
+  String _formatMinutes(int minutes) {
+    if (minutes == 0) return "0m";
+    final h = minutes ~/ 60;
+    final m = minutes % 60;
+    return h > 0 ? "$h" + "h" + (m > 0 ? " $m" + "m" : "") : "$m" + "m";
+  }
+
+  // Widget _buildTimeSummary(
+  //   bool isToday,
+  //   int todayM,
+  //   int weekM,
+  //   int monthM,
+  //   StatsProvider stats,
+  //   List<WorkEntry> todayE,
+  //   List<WorkEntry> weekE,
+  //   List<WorkEntry> monthE,
+  // ) {
+  //   return Card(
+  //     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+  //     child: Padding(
+  //       padding: const EdgeInsets.all(16),
+  //       child: Column(
+  //         children: [
+  //           if (isToday)
+  //             _summaryRow("Today", _formatHM(todayM), color: Colors.green),
+  //           _summaryRow("This Week", _formatHM(weekM), color: Colors.blue),
+  //           _summaryRow("This Month", _formatHM(monthM), color: Colors.purple),
+  //           const Divider(height: 20),
+  //           // here update
+  //           _summaryRow(
+  //             "Entries",
+  //             "${todayE.length + weekE.length + monthE.length}",
+  //           ),
+  //           if (stats.mostUsedTagIn(weekE) != null)
+  //             _summaryRow(
+  //               "Top Tag (Week)",
+  //               "#${stats.mostUsedTagIn(weekE)}",
+  //               color: Colors.indigo,
+  //             ),
+  //         ],
+  //       ),
+  //     ),
+  //   );
+  // }
+  Widget _buildTimeSummary({
+    required bool isToday,
+    required int todayMinutes,
+    required int weekMinutes,
+    required int monthMinutes,
+    required StatsProvider stats,
+    required List<WorkEntry> todayEntries,
+    required List<WorkEntry> weekEntries,
+    required List<WorkEntry> monthEntries,
+  }) {
+    // CORRECT ENTRY COUNTS — NO OVERLAP
+    final todayCount = isToday ? todayEntries.length : 0;
+    final weekCount = weekEntries.length;
+    final monthCount = monthEntries.length;
+
     return Card(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            _summaryRow(
-              "Total Time",
-              "${stats.totalTimeInHours.toStringAsFixed(1)}h",
-            ),
-            const Divider(height: 20),
-            _summaryRow("Today", _formatMinutes(stats.todayMinutes)),
-            _summaryRow("This Week", _formatMinutes(stats.thisWeekMinutes)),
-            _summaryRow("This Month", _formatMinutes(stats.thisMonthMinutes)),
-            if (stats.mostUsedTag != null) ...[
-              const Divider(height: 20),
+            // TODAY
+            if (isToday)
               _summaryRow(
-                "Top Tag",
-                "#${stats.mostUsedTag}",
+                "Today",
+                _formatHM(todayMinutes),
+                color: Colors.green,
+              ),
+
+            // THIS WEEK
+            _summaryRow(
+              "This Week",
+              _formatHM(weekMinutes),
+              color: Colors.blue,
+            ),
+
+            // THIS MONTH
+            _summaryRow(
+              "This Month",
+              _formatHM(monthMinutes),
+              color: Colors.purple,
+            ),
+
+            const Divider(height: 20),
+
+            // CORRECT ENTRY COUNTS
+            if (isToday) _summaryRow("Today Entries", "$todayCount"),
+            _summaryRow("Week Entries", "$weekCount"),
+            _summaryRow("Month Entries", "$monthCount"),
+
+            // TOP TAG
+            if (stats.mostUsedTagIn(weekEntries) != null)
+              _summaryRow(
+                "Top Tag (Week)",
+                "#${stats.mostUsedTagIn(weekEntries)}",
                 color: Colors.indigo,
               ),
-            ],
           ],
         ),
       ),
     );
   }
 
-  Widget _summaryRow(String label, String value, {Color? color}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label, style: const TextStyle(fontSize: 15)),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-              color: color,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildWeeklyChart(StatsProvider stats) {
-    final data = stats.weeklyData;
-    final maxY = data
-        .map((e) => e['minutes'] as int)
-        .reduce((a, b) => a > b ? a : b)
-        .toDouble();
-    final interval = maxY > 60 ? (maxY / 5).ceilToDouble() : 15.0;
+    final data = <Map<String, dynamic>>[];
+    for (int i = 0; i < 7; i++) {
+      final date = _weekStart.add(Duration(days: i));
+      final minutes = stats
+          .entriesOnDate(date)
+          .fold(0, (s, e) => s + e.hours * 60 + e.minutes);
+      final hours = minutes / 60.0; // EXACT HOURS (0.1 for 6 mins)
+      data.add({
+        'day': _dayAbbr(date.weekday),
+        'hours': hours,
+        'minutes': minutes,
+        'date': date,
+      });
+    }
+
+    // Find max hours for scaling
+    final maxHours = data
+        .map((e) => e['hours'] as double)
+        .reduce((a, b) => a > b ? a : b);
+    final suggestedMax = (maxHours * 1.2).ceilToDouble(); // 20% padding
+    final yMax = _roundToNearestEven(suggestedMax); // 2, 4, 6, 8...
+    final interval = yMax <= 4 ? 1.0 : 2.0;
 
     return Card(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -189,7 +383,7 @@ class _StatsScreenState extends State<StatsScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              "This Week",
+              "Weekly Time",
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 16),
@@ -198,14 +392,13 @@ class _StatsScreenState extends State<StatsScreen> {
               child: BarChart(
                 BarChartData(
                   alignment: BarChartAlignment.spaceAround,
-                  maxY: maxY + interval,
+                  maxY: yMax,
                   barTouchData: BarTouchData(
-                    enabled: true,
                     touchTooltipData: BarTouchTooltipData(
-                      getTooltipItem: (group, groupIndex, rod, rodIndex) {
-                        final minutes = data[group.x]['minutes'] as int;
+                      getTooltipItem: (group, _, rod, _) {
+                        final mins = data[group.x]['minutes'] as int;
                         return BarTooltipItem(
-                          _formatMinutes(minutes),
+                          _formatMinutes(mins),
                           const TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.bold,
@@ -220,24 +413,18 @@ class _StatsScreenState extends State<StatsScreen> {
                         showTitles: true,
                         interval: interval,
                         getTitlesWidget: (value, meta) => Text(
-                          '${value.toInt()}m',
-                          style: const TextStyle(fontSize: 10),
+                          '${value.toInt()}h',
+                          style: const TextStyle(fontSize: 11),
                         ),
                       ),
                     ),
                     bottomTitles: AxisTitles(
                       sideTitles: SideTitles(
                         showTitles: true,
-                        getTitlesWidget: (value, meta) {
-                          final index = value.toInt();
-                          if (index < data.length) {
-                            return Text(
-                              data[index]['day'],
-                              style: const TextStyle(fontSize: 12),
-                            );
-                          }
-                          return const Text('');
-                        },
+                        getTitlesWidget: (value, meta) => Text(
+                          data[value.toInt()]['day'],
+                          style: const TextStyle(fontSize: 12),
+                        ),
                       ),
                     ),
                     topTitles: const AxisTitles(
@@ -250,14 +437,13 @@ class _StatsScreenState extends State<StatsScreen> {
                   gridData: const FlGridData(show: true),
                   borderData: FlBorderData(show: false),
                   barGroups: data.asMap().entries.map((e) {
-                    final index = e.key;
-                    final minutes = e.value['minutes'] as int;
+                    final hours = e.value['hours'] as double;
                     return BarChartGroupData(
-                      x: index,
+                      x: e.key,
                       barRods: [
                         BarChartRodData(
-                          toY: minutes.toDouble(),
-                          color: Colors.indigo,
+                          toY: hours,
+                          color: hours > 0 ? Colors.indigo : Colors.grey[300],
                           width: 16,
                           borderRadius: const BorderRadius.vertical(
                             top: Radius.circular(6),
@@ -275,9 +461,101 @@ class _StatsScreenState extends State<StatsScreen> {
     );
   }
 
-  Widget _buildTagChart(StatsProvider stats) {
-    final distribution = stats.tagDistribution;
-    final entries = distribution.entries.toList();
+  Widget _buildPerTitleTime(String label, List<WorkEntry> entries) {
+    final map = <String, int>{};
+    for (final e in entries) {
+      map[e.title] = (map[e.title] ?? 0) + e.hours * 60 + e.minutes;
+    }
+    if (map.isEmpty) return const SizedBox();
+
+    final sorted = map.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+
+    return Card(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              label,
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            ...sorted
+                .take(5)
+                .map(
+                  (e) => Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 2),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(e.key, style: const TextStyle(fontSize: 14)),
+                        Text(
+                          _formatHM(e.value),
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPerTagTime(String label, List<WorkEntry> entries) {
+    final map = <String, int>{};
+    for (final e in entries) {
+      if (e.tag != null) {
+        map[e.tag!] = (map[e.tag!] ?? 0) + e.hours * 60 + e.minutes;
+      }
+    }
+    if (map.isEmpty) return const SizedBox();
+
+    final sorted = map.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+
+    return Card(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              "$label by Tag",
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            ...sorted
+                .take(5)
+                .map(
+                  (e) => Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 2),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text("#${e.key}", style: const TextStyle(fontSize: 14)),
+                        Text(
+                          _formatHM(e.value),
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTagChart(StatsProvider stats, List<WorkEntry> entries) {
+    final dist = stats.tagDistributionIn(entries);
+    final list = dist.entries.toList();
 
     return Card(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -287,7 +565,7 @@ class _StatsScreenState extends State<StatsScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              "Tag Distribution",
+              "Tag Distribution (Week)",
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 16),
@@ -295,15 +573,14 @@ class _StatsScreenState extends State<StatsScreen> {
               height: 200,
               child: PieChart(
                 PieChartData(
-                  sections: entries.asMap().entries.map((e) {
-                    final index = e.key;
+                  sections: list.asMap().entries.map((e) {
                     final tag = e.value.key;
                     final count = e.value.value;
-                    final percentage = (count / stats.totalEntries) * 100;
+                    final pct = (count / entries.length) * 100;
                     return PieChartSectionData(
                       value: count.toDouble(),
-                      title: '$tag\n${percentage.toStringAsFixed(0)}%',
-                      color: _tagColor(index),
+                      title: '$tag\n${pct.toStringAsFixed(0)}%',
+                      color: _tagColor(e.key),
                       radius: 60,
                       titleStyle: const TextStyle(
                         fontSize: 12,
@@ -323,23 +600,61 @@ class _StatsScreenState extends State<StatsScreen> {
     );
   }
 
-  Color _tagColor(int index) {
-    const colors = [
-      Colors.indigo,
-      Colors.orange,
-      Colors.green,
-      Colors.purple,
-      Colors.teal,
-      Colors.red,
-      Colors.blue,
-    ];
-    return colors[index % colors.length];
+  Color _tagColor(int i) => [
+    Colors.indigo,
+    Colors.orange,
+    Colors.green,
+    Colors.purple,
+    Colors.teal,
+  ][i % 5];
+
+  String _formatDate(DateTime d) => "${d.day} ${_monthName(d.month)} ${d.year}";
+  String _monthName(int m) => [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ][m - 1];
+  String _dayAbbr(int w) =>
+      ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][w - 1];
+  String _formatWeek(DateTime d) =>
+      "${d.month}/${d.day} - ${_weekEnd.month}/${_weekEnd.day}";
+  String _formatHM(int m) =>
+      "${m ~/ 60}h ${m % 60}m".replaceAll(" 0m", "").replaceAll("0h ", "");
+  // int _totalMinutes(List<WorkEntry> e) =>
+  //     e.fold(0, (s, x) => s + x.hours * 60 + x.minutes);
+  int _totalMinutes(List<WorkEntry> entries) {
+    return entries.fold(0, (sum, e) => sum + e.hours * 60 + e.minutes);
   }
 
-  String _formatMinutes(int minutes) {
-    if (minutes == 0) return "0m";
-    final h = minutes ~/ 60;
-    final m = minutes % 60;
-    return "${h > 0 ? '${h}h ' : ''}${m}m";
+  bool _isSameDay(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
+
+  Widget _summaryRow(String label, String value, {Color? color}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: const TextStyle(fontSize: 15)),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: color,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

@@ -169,6 +169,72 @@ class StatsProvider extends ChangeNotifier {
     return data;
   }
 
+  List<WorkEntry> entriesInRange(DateTime start, DateTime end) {
+    final s = DateTime(start.year, start.month, start.day);
+    final e = DateTime(
+      end.year,
+      end.month,
+      end.day,
+    ).add(const Duration(days: 1));
+
+    return _allEntries.where((entry) {
+      final entryDate = DateTime(
+        entry.date.year,
+        entry.date.month,
+        entry.date.day,
+      );
+      return entryDate.isAfter(s) && entryDate.isBefore(e);
+    }).toList();
+  }
+
+  // ADD THESE TO StatsProvider
+  // List<WorkEntry> entriesOnDate(DateTime date) {
+  //   final d = DateTime(date.year, date.month, date.day);
+  //   return _allEntries
+  //       .where((e) => DateTime(e.date.year, e.date.month, e.date.day) == d)
+  //       .toList();
+  // }
+  List<WorkEntry> entriesOnDate(DateTime date) {
+    final d = DateTime(date.year, date.month, date.day);
+    return _allEntries
+        .where((e) => DateTime(e.date.year, e.date.month, e.date.day) == d)
+        .toList();
+  }
+
+  // String? mostUsedTagIn(List<WorkEntry> entries) {
+  //   final map = <String, int>{};
+  //   for (final e in entries) {
+  //     if (e.tag != null) map[e.tag!] = (map[e.tag!] ?? 0) + 1;
+  //   }
+  //   if (map.isEmpty) return null;
+  //   return map.entries.reduce((a, b) => a.value > b.value ? a : b).key;
+  // }
+  String? mostUsedTagIn(List<WorkEntry> entries) {
+    final map = <String, int>{};
+    for (final e in entries)
+      if (e.tag != null) map[e.tag!] = (map[e.tag!] ?? 0) + 1;
+    return map.isEmpty
+        ? null
+        : map.entries.reduce((a, b) => a.value > b.value ? a : b).key;
+  }
+
+  // Map<String, int> tagDistributionIn(List<WorkEntry> entries) {
+  //   final map = <String, int>{};
+  //   for (final e in entries) {
+  //     final tag = e.tag ?? 'None';
+  //     map[tag] = (map[tag] ?? 0) + 1;
+  //   }
+  //   return map;
+  // }
+  Map<String, int> tagDistributionIn(List<WorkEntry> entries) {
+    final map = <String, int>{};
+    for (final e in entries) {
+      final tag = e.tag ?? 'None';
+      map[tag] = (map[tag] ?? 0) + 1;
+    }
+    return map;
+  }
+
   // THIS MONTH ← MISSING BEFORE!
   int get thisMonthMinutes {
     final now = DateTime.now();
@@ -183,4 +249,6 @@ class StatsProvider extends ChangeNotifier {
     const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     return days[weekday - 1];
   }
+
+  // added lately
 }
