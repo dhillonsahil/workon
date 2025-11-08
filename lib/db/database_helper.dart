@@ -20,6 +20,22 @@ class DatabaseHelper {
     _database = await openDatabase(path, version: 1, onCreate: _createTables);
     return _database!;
   }
+  // Add these methods
+
+  Future<int> updateEntry(WorkEntry entry) async {
+    final db = await database;
+    return await db.update(
+      'entries',
+      entry.toMap(),
+      where: 'id = ?',
+      whereArgs: [entry.id],
+    );
+  }
+
+  Future<int> deleteEntry(int id) async {
+    final db = await database;
+    return await db.delete('entries', where: 'id = ?', whereArgs: [id]);
+  }
 
   Future<void> _createTables(Database db, int version) async {
     // Entries table

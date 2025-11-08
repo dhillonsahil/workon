@@ -5,11 +5,13 @@ import '../models/work_title.dart';
 import '../providers/entry_provider.dart';
 import '../providers/title_provider.dart';
 import '../widgets/time_picker_lock.dart';
+import '../db/database_helper.dart';
 
 class AddEntryDialog extends StatefulWidget {
   final DateTime? date;
+  final WorkEntry? entryToEdit;
 
-  const AddEntryDialog({super.key, this.date});
+  const AddEntryDialog({super.key, this.date, this.entryToEdit});
 
   @override
   State<AddEntryDialog> createState() => _AddEntryDialogState();
@@ -24,23 +26,53 @@ class _AddEntryDialogState extends State<AddEntryDialog> {
 
   late DateTime _selectedDate;
 
+  // ADD CONTROLLERS
+  late FixedExtentScrollController _hourController;
+  late FixedExtentScrollController _minuteController;
+
   @override
   void initState() {
     super.initState();
     _selectedDate = widget.date ?? DateTime.now();
+
+    // Initialize controllers
+    _hourController = FixedExtentScrollController(initialItem: _hours);
+    _minuteController = FixedExtentScrollController(initialItem: _minutes);
+
+    if (widget.entryToEdit != null) {
+      final e = widget.entryToEdit!;
+      _titleCtrl.text = e.title;
+      _descCtrl.text = e.description;
+      _hours = e.hours;
+      _minutes = e.minutes;
+      _selectedTitle = context.read<TitleProvider>().getTitleByName(e.title);
+
+      // Update controllers
+      _hourController.jumpToItem(_hours);
+      _minuteController.jumpToItem(_minutes);
+    }
+  }
+
+  @override
+  void dispose() {
+    _hourController.dispose();
+    _minuteController.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final titles = context.watch<TitleProvider>().titles;
+    final isEdit = widget.entryToEdit != null;
 
     return AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      title: Text("Log Work - ${_formatDate(_selectedDate)}"),
+      title: Text(
+        isEdit ? "Edit Entry" : "Log Work - ${_formatDate(_selectedDate)}",
+      ),
       content: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 400),
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(8),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -77,15 +109,32 @@ class _AddEntryDialogState extends State<AddEntryDialog> {
               ),
               const SizedBox(height: 20),
               const Text(
-                "Time Studied",
+                "Time Studied *",
                 style: TextStyle(fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 8),
-              LockTimePicker(
-                onChanged: (h, m) => setState(() {
-                  _hours = h;
-                  _minutes = m;
-                }),
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildLabeledWheel(
+                      "Hours",
+                      _hourController,
+                      0,
+                      23,
+                      (h) => _hours = h,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: _buildLabeledWheel(
+                      "Minutes",
+                      _minuteController,
+                      0,
+                      59,
+                      (m) => _minutes = m,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -97,28 +146,91 @@ class _AddEntryDialogState extends State<AddEntryDialog> {
           child: const Text("Cancel"),
         ),
         ElevatedButton(
-          onPressed: () {
-            final title = _selectedTitle?.name ?? _titleCtrl.text.trim();
-            if (title.isEmpty) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text("Title is required")),
-              );
-              return;
-            }
-            final entry = WorkEntry(
-              title: title,
-              description: _descCtrl.text,
-              hours: _hours,
-              minutes: _minutes,
-              date: _selectedDate,
-            );
-            context.read<EntryProvider>().addEntry(entry);
-            Navigator.pop(context);
-          },
-          child: const Text("Save"),
+          onPressed: _canSave() ? _saveEntry : null,
+          child: Text(isEdit ? "Update" : "Save"),
         ),
       ],
     );
+  }
+
+  // REFACTORED WHEEL BUILDER
+  Widget _buildLabeledWheel(
+    String label,
+    FixedExtentScrollController controller,
+    int min,
+    int max,
+    Function(int) onChange,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+        const SizedBox(height: 4),
+        SizedBox(
+          height: 100,
+          child: ListWheelScrollView.useDelegate(
+            controller: controller,
+            itemExtent: 40,
+            physics: const FixedExtentScrollPhysics(),
+            onSelectedItemChanged: (index) {
+              onChange(index);
+              setState(() {}); // Trigger rebuild to update button state
+            },
+            childDelegate: ListWheelChildBuilderDelegate(
+              builder: (ctx, i) {
+                final val = i.toString().padLeft(2, '0');
+                final selected =
+                    controller.hasClients && controller.selectedItem == i;
+                return Center(
+                  child: Text(
+                    val,
+                    style: TextStyle(
+                      fontSize: selected ? 24 : 18,
+                      fontWeight: selected
+                          ? FontWeight.bold
+                          : FontWeight.normal,
+                      color: selected ? Colors.indigo : Colors.grey[600],
+                    ),
+                  ),
+                );
+              },
+              childCount: max + 1,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  bool _canSave() {
+    final title = _selectedTitle?.name ?? _titleCtrl.text.trim();
+    final totalMinutes = _hours * 60 + _minutes;
+    return title.isNotEmpty && totalMinutes > 0;
+  }
+
+  void _saveEntry() async {
+    final title = _selectedTitle?.name ?? _titleCtrl.text.trim();
+    final totalMinutes = _hours * 60 + _minutes;
+
+    if (title.isEmpty || totalMinutes == 0) return;
+
+    final entry = WorkEntry(
+      id: widget.entryToEdit?.id,
+      title: title,
+      description: _descCtrl.text,
+      hours: _hours,
+      minutes: _minutes,
+      date: _selectedDate,
+    );
+
+    if (widget.entryToEdit != null) {
+      await DatabaseHelper.instance.updateEntry(entry);
+    } else {
+      await DatabaseHelper.instance.insertEntry(entry);
+    }
+
+    context.read<EntryProvider>().loadEntries();
+    Navigator.pop(context);
   }
 
   String _formatDate(DateTime d) => '${d.day}/${d.month}/${d.year}';

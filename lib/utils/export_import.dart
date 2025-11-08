@@ -4,19 +4,20 @@ import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:provider/provider.dart'; // ADD THIS
 import '../db/database_helper.dart';
+import 'package:provider/provider.dart';
 import '../providers/entry_provider.dart';
 import '../providers/title_provider.dart';
 
 class ExportImport {
+  // EXPORT
   static Future<void> exportData(BuildContext context) async {
-    if (!await _requestStoragePermission()) {
-      _showSnackBar(context, "Storage permission is required to export data.");
-      return;
-    }
-
     try {
+      // Try SAF first (no permission needed)
+      final directoryPath = await FilePicker.platform.getDirectoryPath(
+        dialogTitle: 'Choose export folder',
+      );
+
       final db = await DatabaseHelper.instance.database;
       final entries = await db.query('entries');
       final titles = await db.query('work_titles');
@@ -30,34 +31,50 @@ class ExportImport {
       };
 
       final jsonString = jsonEncode(data);
-      final directory = await getExternalStorageDirectory();
-      final fileName = 'workon_export_${_timestamp()}.json';
-      final file = File('${directory!.path}/$fileName');
+      final fileName =
+          await _promptFileName(context) ??
+          'workon_export_${_timestamp()}.json';
+
+      String filePath;
+
+      if (directoryPath != null) {
+        filePath = '$directoryPath/$fileName';
+      } else {
+        // Fallback: request permission + use external storage
+        if (!await _requestPermission(context)) {
+          _showSnackBar(context, "Permission denied.");
+          return;
+        }
+        final dir = await getExternalStorageDirectory();
+        if (dir == null) {
+          _showSnackBar(context, "Could not access storage.");
+          return;
+        }
+        filePath = '${dir.path}/$fileName';
+      }
+
+      final file = File(filePath);
       await file.writeAsString(jsonString);
 
-      _showSnackBar(
-        context,
-        "Exported successfully!\nSaved to: $fileName",
-        isSuccess: true,
-      );
+      _showSnackBar(context, "Exported to:\n$filePath", isSuccess: true);
     } catch (e) {
-      _showSnackBar(context, "Export failed: ${e.toString()}");
+      _showSnackBar(context, "Export failed: $e");
     }
   }
 
+  // IMPORT
   static Future<void> importData(BuildContext context) async {
-    if (!await _requestStoragePermission()) {
-      _showSnackBar(context, "Storage permission is required to import data.");
-      return;
-    }
-
     try {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['json'],
+        dialogTitle: 'Select WorkOn Export File',
       );
 
-      if (result == null || result.files.isEmpty) return;
+      if (result == null || result.files.isEmpty) {
+        _showSnackBar(context, "Import cancelled");
+        return;
+      }
 
       final file = File(result.files.single.path!);
       final jsonString = await file.readAsString();
@@ -65,61 +82,88 @@ class ExportImport {
 
       final db = await DatabaseHelper.instance.database;
       final batch = db.batch();
-
       batch.delete('entries');
       batch.delete('work_titles');
       batch.delete('tags');
-
       for (final e in data['entries'] ?? []) batch.insert('entries', e);
       for (final t in data['work_titles'] ?? []) batch.insert('work_titles', t);
       for (final g in data['tags'] ?? []) batch.insert('tags', g);
-
       await batch.commit(noResult: true);
 
-      // RELOAD PROVIDERS SAFELY
       Future.microtask(() {
-        final entryProvider = Provider.of<EntryProvider>(
-          context,
-          listen: false,
-        );
-        final titleProvider = Provider.of<TitleProvider>(
-          context,
-          listen: false,
-        );
-
-        entryProvider.loadEntries();
-        titleProvider.loadTitles();
+        Provider.of<EntryProvider>(context, listen: false).loadEntries();
+        Provider.of<TitleProvider>(context, listen: false).loadTitles();
       });
 
-      _showSnackBar(context, "Data imported successfully!", isSuccess: true);
+      _showSnackBar(context, "Imported successfully!", isSuccess: true);
     } catch (e) {
-      _showSnackBar(context, "Import failed: ${e.toString()}");
+      _showSnackBar(context, "Import failed: $e");
     }
   }
 
-  static Future<bool> _requestStoragePermission() async {
-    final status = await Permission.storage.status;
-    if (status.isDenied) {
-      final result = await Permission.storage.request();
-      return result.isGranted;
+  // PERMISSION
+  static Future<bool> _requestPermission(BuildContext context) async {
+    var status = await Permission.storage.status;
+    if (!status.isGranted) {
+      status = await Permission.storage.request();
     }
     return status.isGranted;
   }
 
+  // PROMPT FILE NAME
+  static Future<String?> _promptFileName(BuildContext context) async {
+    final controller = TextEditingController(
+      text: 'workon_export_${_timestamp()}.json',
+    );
+    return showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text("Export File Name"),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(
+            hintText: "e.g. my_data.json",
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("Cancel"),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              var name = controller.text.trim();
+              if (name.isEmpty) return;
+              if (!name.endsWith('.json')) name = '$name.json';
+              Navigator.pop(ctx, name);
+            },
+            child: const Text("Export"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // SNACKBAR
   static void _showSnackBar(
     BuildContext context,
     String message, {
     bool isSuccess = false,
   }) {
+    if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
         backgroundColor: isSuccess ? Colors.green[700] : Colors.red[700],
         behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 5),
       ),
     );
   }
 
+  // TIMESTAMP
   static String _timestamp() {
     final now = DateTime.now();
     return '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}_${now.hour}${now.minute}';
