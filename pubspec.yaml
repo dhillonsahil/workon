@@ -96,9 +96,16 @@ flutter:
   # see https://flutter.dev/to/font-from-package
 
 
-flutter_icons:
+
+  # Add this at the end of your pubspec.yaml file, at the top level
+flutter_launcher_icons:
+  # The path to your icon image file (e.g., your_icon.png)
+  # image_path: "assets/icon/app_icon.png"
+  # Set to true to generate different sizes for Android
   android: true
-  ios: false
+  # Set to true to generate different sizes for iOS
+  ios: true
+  # Optional: Specify a different icon for the adaptive foreground on Android 8.0+
   image_path: "./lib/assets/icon.png"
   adaptive_icon_background: "#ffffff"   # choose your background color
-  adaptive_icon_foreground: "./lib/assets/app_icon.png"
+  adaptive_icon_foreground: "./lib/assets/icon.png"
