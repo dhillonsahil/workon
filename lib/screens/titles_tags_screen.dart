@@ -43,6 +43,8 @@ class _TitlesTagsScreenState extends State<TitlesTagsScreen>
         bottom: TabBar(
           controller: _tabController,
           indicatorColor: Colors.white,
+          labelColor: Colors.white,
+          unselectedLabelColor: Colors.white70,
           tabs: const [
             Tab(text: "Titles"),
             Tab(text: "Tags"),
