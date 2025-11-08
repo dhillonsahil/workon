@@ -169,21 +169,30 @@ class StatsProvider extends ChangeNotifier {
     return data;
   }
 
+  // List<WorkEntry> entriesInRange(DateTime start, DateTime end) {
+  //   final s = DateTime(start.year, start.month, start.day);
+  //   final e = DateTime(
+  //     end.year,
+  //     end.month,
+  //     end.day,
+  //   ).add(const Duration(days: 1));
+
+  //   return _allEntries.where((entry) {
+  //     final entryDate = DateTime(
+  //       entry.date.year,
+  //       entry.date.month,
+  //       entry.date.day,
+  //     );
+  //     return entryDate.isAfter(s) && entryDate.isBefore(e);
+  //   }).toList();
+  // }
   List<WorkEntry> entriesInRange(DateTime start, DateTime end) {
-    final s = DateTime(start.year, start.month, start.day);
-    final e = DateTime(
-      end.year,
-      end.month,
-      end.day,
-    ).add(const Duration(days: 1));
+    final s = DateTime(start.year, start.month, start.day); // 00:00
+    final e = DateTime(end.year, end.month, end.day, 23, 59, 59); // 23:59:59
 
     return _allEntries.where((entry) {
-      final entryDate = DateTime(
-        entry.date.year,
-        entry.date.month,
-        entry.date.day,
-      );
-      return entryDate.isAfter(s) && entryDate.isBefore(e);
+      final d = DateTime(entry.date.year, entry.date.month, entry.date.day);
+      return d.isAtSameMomentAs(s) || (d.isAfter(s) && d.isBefore(e));
     }).toList();
   }
 
