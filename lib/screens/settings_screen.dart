@@ -33,10 +33,10 @@ class SettingsScreen extends StatelessWidget {
             title: Text("App Version"),
             subtitle: Text("1.0.0"),
           ),
-          const ListTile(
-            leading: Icon(Icons.code),
-            title: Text("Made with Flutter"),
-          ),
+          // const ListTile(
+          //   leading: Icon(Icons.code),
+          //   title: Text("Made with Flutter"),
+          // ),
         ],
       ),
     );

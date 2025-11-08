@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:workon/screens/titles_tags_screen.dart';
 import '../providers/entry_provider.dart';
 import '../providers/title_provider.dart';
-import '../models/work_title.dart';
+// import '../models/work_title.dart';
 import 'daily_progress_tab.dart';
 import 'stats_screen.dart';
 import 'settings_screen.dart';
@@ -85,68 +85,68 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  void _showAddTitleDialog(BuildContext context) {
-    final nameCtrl = TextEditingController();
-    final tagCtrl = TextEditingController();
+  // void _showAddTitleDialog(BuildContext context) {
+  //   final nameCtrl = TextEditingController();
+  //   final tagCtrl = TextEditingController();
 
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text("Add Work Title"),
-        content: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 400),
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: nameCtrl,
-                  decoration: const InputDecoration(
-                    labelText: "Title *",
-                    hintText: "e.g. English, Gym",
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: tagCtrl,
-                  decoration: const InputDecoration(
-                    labelText: "Tag (optional)",
-                    hintText: "e.g. Study, Exercise",
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text("Cancel"),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              final name = nameCtrl.text.trim();
-              if (name.isEmpty) {
-                ScaffoldMessenger.of(ctx).showSnackBar(
-                  const SnackBar(content: Text("Title is required")),
-                );
-                return;
-              }
-              context.read<TitleProvider>().addTitle(
-                WorkTitle(
-                  name: name,
-                  tag: tagCtrl.text.trim().isEmpty ? null : tagCtrl.text.trim(),
-                ),
-              );
-              Navigator.pop(ctx);
-            },
-            child: const Text("Add"),
-          ),
-        ],
-      ),
-    );
-  }
+  //   showDialog(
+  //     context: context,
+  //     builder: (ctx) => AlertDialog(
+  //       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+  //       title: const Text("Add Work Title"),
+  //       content: ConstrainedBox(
+  //         constraints: const BoxConstraints(maxWidth: 400),
+  //         child: SingleChildScrollView(
+  //           child: Column(
+  //             mainAxisSize: MainAxisSize.min,
+  //             children: [
+  //               TextField(
+  //                 controller: nameCtrl,
+  //                 decoration: const InputDecoration(
+  //                   labelText: "Title *",
+  //                   hintText: "e.g. English, Gym",
+  //                   border: OutlineInputBorder(),
+  //                 ),
+  //               ),
+  //               const SizedBox(height: 12),
+  //               TextField(
+  //                 controller: tagCtrl,
+  //                 decoration: const InputDecoration(
+  //                   labelText: "Tag (optional)",
+  //                   hintText: "e.g. Study, Exercise",
+  //                   border: OutlineInputBorder(),
+  //                 ),
+  //               ),
+  //             ],
+  //           ),
+  //         ),
+  //       ),
+  //       actions: [
+  //         TextButton(
+  //           onPressed: () => Navigator.pop(ctx),
+  //           child: const Text("Cancel"),
+  //         ),
+  //         ElevatedButton(
+  //           onPressed: () {
+  //             final name = nameCtrl.text.trim();
+  //             if (name.isEmpty) {
+  //               ScaffoldMessenger.of(ctx).showSnackBar(
+  //                 const SnackBar(content: Text("Title is required")),
+  //               );
+  //               return;
+  //             }
+  //             context.read<TitleProvider>().addTitle(
+  //               WorkTitle(
+  //                 name: name,
+  //                 tag: tagCtrl.text.trim().isEmpty ? null : tagCtrl.text.trim(),
+  //               ),
+  //             );
+  //             Navigator.pop(ctx);
+  //           },
+  //           child: const Text("Add"),
+  //         ),
+  //       ],
+  //     ),
+  //   );
+  // }
 }
