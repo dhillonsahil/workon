@@ -23,7 +23,7 @@ class _DailyProgressTabState extends State<DailyProgressTab> {
       final today = DateTime.now();
       final daysSince2020 = today.difference(DateTime(2020)).inDays;
       final controller = PrimaryScrollController.of(context);
-      controller.jumpTo(daysSince2020 * 56.0);
+      // controller.jumpTo(daysSince2020 * 56.0);
     });
   }
 
