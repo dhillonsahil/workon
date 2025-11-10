@@ -402,7 +402,7 @@ class _AddEntryDialogState extends State<AddEntryDialog> {
 
               // TIME PICKER
               const Text(
-                "Time Studied *",
+                "Time Spent *",
                 style: TextStyle(fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 8),
