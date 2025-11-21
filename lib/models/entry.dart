@@ -1,7 +1,7 @@
 class WorkEntry {
   final int? id;
   final String title;
-  final String description;
+  final String? description;
   final int hours;
   final int minutes;
   final DateTime date;

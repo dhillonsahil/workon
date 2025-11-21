@@ -1,82 +1,88 @@
+// lib/widgets/entry_card.dart
 import 'package:flutter/material.dart';
-import '../models/entry.dart';
+import 'package:workon/models/entry.dart';
 
 class EntryCard extends StatelessWidget {
   final WorkEntry entry;
+  final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
 
-  const EntryCard({super.key, required this.entry});
+  const EntryCard({
+    super.key,
+    required this.entry,
+    this.onTap,
+    this.onLongPress,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Card(
-      margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      elevation: 1,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // TITLE + TAG
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    entry.title,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.black87,
-                    ),
-                  ),
-                ),
-                if (entry.tag != null)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.indigo.shade50,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.indigo.shade200),
-                    ),
+      elevation: 3,
+      margin: const EdgeInsets.symmetric(vertical: 6),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        onLongPress: onLongPress,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Title + Tag
+              Row(
+                children: [
+                  Expanded(
                     child: Text(
-                      "#${entry.tag}",
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.indigo.shade700,
-                        fontWeight: FontWeight.w500,
+                      entry.title,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
                   ),
-              ],
-            ),
-            const SizedBox(height: 6),
+                  if (entry.tag != null && entry.tag!.isNotEmpty)
+                    Chip(
+                      label: Text(
+                        "#${entry.tag}",
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                      backgroundColor: Colors.indigo.withOpacity(0.15),
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 8),
 
-            // TIME
-            Row(
-              children: [
-                const Icon(Icons.access_time, size: 16, color: Colors.grey),
-                const SizedBox(width: 4),
+              // Description — FIXED: Now null-safe
+              if (entry.description?.isNotEmpty == true) ...[
                 Text(
-                  entry.formattedTime, // NOW VALID
-                  style: const TextStyle(fontSize: 14, color: Colors.black87),
+                  entry.description!, // Safe because we checked isNotEmpty
+                  style: TextStyle(fontSize: 14, color: Colors.grey[700]),
                 ),
+                const SizedBox(height: 12),
               ],
-            ),
 
-            // DESCRIPTION
-            if (entry.description.isNotEmpty) ...[
-              const SizedBox(height: 6),
-              Text(
-                entry.description,
-                style: TextStyle(fontSize: 13, color: Colors.grey[700]),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
+              // Time + Hours
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    "${entry.hours}h ${entry.minutes}m",
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.indigo,
+                    ),
+                  ),
+                  Text(
+                    "${entry.date.day}/${entry.date.month}/${entry.date.year}",
+                    style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                  ),
+                ],
               ),
             ],
-          ],
+          ),
         ),
       ),
     );
