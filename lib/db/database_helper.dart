@@ -1,6 +1,8 @@
+// lib/db/database_helper.dart
 import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
-import 'package:workon/models/entry.dart';
+import '../models/entry.dart';
+import '../models/todo.dart'; // ← NEW IMPORT
 
 class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._init();
@@ -20,13 +22,13 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 2, // BUMP TO 2
+      version: 3, // ← Now version 3 with Todos
       onCreate: _createDB,
-      onUpgrade: _onUpgrade,
     );
   }
 
   Future _createDB(Database db, int version) async {
+    // Existing tables
     await db.execute('''
       CREATE TABLE entries (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -53,17 +55,24 @@ class DatabaseHelper {
         name TEXT NOT NULL UNIQUE
       )
     ''');
+
+    // NEW: Todos table
+    await db.execute('''
+      CREATE TABLE todos (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        title TEXT NOT NULL,
+        description TEXT,
+        tag TEXT,
+        priority TEXT NOT NULL,
+        dueDate INTEGER NOT NULL,
+        isCompleted INTEGER NOT NULL DEFAULT 0,
+        timeTakenMinutes INTEGER,
+        createdAt INTEGER NOT NULL
+      )
+    ''');
   }
 
-  // MIGRATION: Add 'tag' column to existing tables
-  Future _onUpgrade(Database db, int oldVersion, int newVersion) async {
-    if (oldVersion < 2) {
-      await db.execute('ALTER TABLE entries ADD COLUMN tag TEXT');
-      await db.execute('ALTER TABLE work_titles ADD COLUMN tag TEXT');
-    }
-  }
-
-  // === ENTRIES ===
+  // === ENTRIES (unchanged) ===
   Future<int> insertEntry(WorkEntry entry) async {
     final db = await database;
     return await db.insert('entries', entry.toMap());
@@ -90,7 +99,68 @@ class DatabaseHelper {
     return maps.map((m) => WorkEntry.fromMap(m)).toList();
   }
 
-  // === TITLES ===
+  // === TODOS (NEW) ===
+  Future<int> insertTodo(Todo todo) async {
+    final db = await database;
+    return await db.insert('todos', todo.toMap());
+  }
+
+  Future<int> updateTodo(Todo todo) async {
+    final db = await database;
+    return await db.update(
+      'todos',
+      todo.toMap(),
+      where: 'id = ?',
+      whereArgs: [todo.id],
+    );
+  }
+
+  Future<int> deleteTodo(int id) async {
+    final db = await database;
+    return await db.delete('todos', where: 'id = ?', whereArgs: [id]);
+  }
+
+  Future<List<Todo>> getAllTodos() async {
+    final db = await database;
+    final maps = await db.query(
+      'todos',
+      orderBy: 'dueDate ASC, createdAt DESC',
+    );
+    return maps.map((m) => Todo.fromMap(m)).toList();
+  }
+
+  Future<List<Todo>> getTodosForDate(DateTime date) async {
+    final db = await database;
+    final start = DateTime(date.year, date.month, date.day);
+    final end = start.add(const Duration(days: 1));
+    final maps = await db.rawQuery(
+      '''
+      SELECT * FROM todos 
+      WHERE dueDate >= ? AND dueDate < ?
+      ORDER BY dueDate ASC
+    ''',
+      [start.millisecondsSinceEpoch, end.millisecondsSinceEpoch],
+    );
+    return maps.map((m) => Todo.fromMap(m)).toList();
+  }
+
+  // Optional: Get overdue + today todos
+  Future<List<Todo>> getOverdueAndTodayTodos() async {
+    final db = await database;
+    final now = DateTime.now();
+    final todayEnd = DateTime(now.year, now.month, now.day + 1);
+    final maps = await db.rawQuery(
+      '''
+      SELECT * FROM todos 
+      WHERE dueDate < ? AND isCompleted = 0
+      ORDER BY dueDate ASC
+    ''',
+      [todayEnd.millisecondsSinceEpoch],
+    );
+    return maps.map((m) => Todo.fromMap(m)).toList();
+  }
+
+  // === TITLES & TAGS (unchanged) ===
   Future<int> insertTitle(Map<String, dynamic> title) async {
     final db = await database;
     return await db.insert('work_titles', title);
@@ -111,7 +181,6 @@ class DatabaseHelper {
     return await db.delete('work_titles', where: 'id = ?', whereArgs: [id]);
   }
 
-  // === TAGS ===
   Future<int> insertTag(String tag) async {
     final db = await database;
     return await db.insert('tags', {'name': tag});
@@ -124,6 +193,6 @@ class DatabaseHelper {
 
   Future<void> close() async {
     final db = await database;
-    db.close();
+    await db.close();
   }
 }

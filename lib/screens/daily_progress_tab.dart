@@ -1,159 +1,293 @@
+// lib/screens/daily_progress_tab.dart
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-import 'package:workon/db/database_helper.dart';
+import 'package:table_calendar/table_calendar.dart';
 import 'package:workon/models/entry.dart';
-import '../providers/entry_provider.dart';
-import '../widgets/entry_card.dart';
-import '../widgets/add_entry_dialog.dart';
+import 'package:workon/models/todo.dart';
+import 'package:workon/providers/entry_provider.dart';
+import 'package:workon/providers/todo_provider.dart';
+import 'package:workon/widgets/add_entry_dialog.dart';
+import 'package:workon/widgets/add_todo_dialog.dart';
+import 'package:workon/widgets/entry_card.dart';
+import 'package:workon/widgets/custom_app_bar.dart';
 
 class DailyProgressTab extends StatefulWidget {
   const DailyProgressTab({super.key});
 
   @override
-  State<DailyProgressTab> createState() => _DailyProgressTabState();
+  State<DailyProgressTab> createState() => DailyProgressTabState(); // ← NOW PUBLIC!
 }
 
-class _DailyProgressTabState extends State<DailyProgressTab> {
+// ← REMOVED _ FROM STATE NAME
+class DailyProgressTabState extends State<DailyProgressTab> {
   DateTime _selectedDate = DateTime.now();
+  DateTime _focusedDate = DateTime.now();
 
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final today = DateTime.now();
-      final daysSince2020 = today.difference(DateTime(2020)).inDays;
-      final controller = PrimaryScrollController.of(context);
-      // controller.jumpTo(daysSince2020 * 56.0);
-    });
+  // Public method for FAB to call
+  void showAddOptions() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 60,
+              height: 5,
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(3),
+              ),
+            ),
+            const SizedBox(height: 24),
+            const Text(
+              "Add New",
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 24),
+            ListTile(
+              leading: const Icon(
+                Icons.work_outline,
+                color: Colors.indigo,
+                size: 32,
+              ),
+              title: const Text("Log Work", style: TextStyle(fontSize: 18)),
+              subtitle: const Text("Track time spent on tasks"),
+              onTap: () {
+                Navigator.pop(context);
+                showDialog(
+                  context: context,
+                  builder: (_) => AddEntryDialog(date: _selectedDate),
+                );
+              },
+            ),
+            const Divider(height: 32),
+            ListTile(
+              leading: const Icon(
+                Icons.check_box_outlined,
+                color: Colors.green,
+                size: 32,
+              ),
+              title: const Text("Add Todo", style: TextStyle(fontSize: 18)),
+              subtitle: const Text("Create a task with due date"),
+              onTap: () {
+                Navigator.pop(context);
+                showDialog(
+                  context: context,
+                  builder: (_) => AddTodoDialog(initialDate: _selectedDate),
+                );
+              },
+            ),
+            const SizedBox(height: 16),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: CustomScrollView(
-        slivers: [
-          SliverToBoxAdapter(
-            child: Card(
-              margin: const EdgeInsets.all(16),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-              elevation: 2,
-              child: CalendarDatePicker(
-                initialDate: _selectedDate,
-                firstDate: DateTime(2020),
-                lastDate: DateTime.now().add(const Duration(days: 365)),
-                onDateChanged: (date) => setState(() => _selectedDate = date),
+      appBar: CustomAppBar(
+        title: "Daily Progress",
+        onSettingsTap: () => Navigator.pushNamed(context, '/settings'),
+        onTitlesTap: () => Navigator.pushNamed(context, '/titles'),
+      ),
+      body: Column(
+        children: [
+          // Calendar
+          Card(
+            margin: const EdgeInsets.all(16),
+            elevation: 4,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Consumer2<EntryProvider, TodoProvider>(
+              builder: (context, entryProvider, todoProvider, _) {
+                return TableCalendar(
+                  firstDay: DateTime(2020),
+                  lastDay: DateTime.now().add(const Duration(days: 365)),
+                  focusedDay: _focusedDate,
+                  selectedDayPredicate: (day) => isSameDay(_selectedDate, day),
+                  onDaySelected: (selectedDay, focusedDay) {
+                    setState(() {
+                      _selectedDate = selectedDay;
+                      _focusedDate = focusedDay;
+                    });
+                  },
+                  calendarFormat: CalendarFormat.month,
+                  startingDayOfWeek: StartingDayOfWeek.monday,
+                  headerStyle: const HeaderStyle(
+                    formatButtonVisible: false,
+                    titleCentered: true,
+                    titleTextStyle: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  calendarStyle: const CalendarStyle(
+                    outsideDaysVisible: false,
+                    weekendTextStyle: TextStyle(color: Colors.red),
+                    selectedDecoration: BoxDecoration(
+                      color: Colors.indigo,
+                      shape: BoxShape.circle,
+                    ),
+                    todayDecoration: BoxDecoration(
+                      color: Colors.indigoAccent,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  calendarBuilders: CalendarBuilders(
+                    defaultBuilder: (context, day, focusedDay) {
+                      return _buildDay(day, entryProvider, todoProvider);
+                    },
+                    selectedBuilder: (context, day, focusedDay) {
+                      return _buildDay(
+                        day,
+                        entryProvider,
+                        todoProvider,
+                        isSelected: true,
+                      );
+                    },
+                    todayBuilder: (context, day, focusedDay) {
+                      return _buildDay(
+                        day,
+                        entryProvider,
+                        todoProvider,
+                        isToday: true,
+                      );
+                    },
+                  ),
+                );
+              },
+            ),
+          ),
+
+          // Stats Row
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              children: [
+                _statChip("Work Logged", Icons.timer, Colors.indigo),
+                const SizedBox(width: 12),
+                _statChip("Pending Todos", Icons.pending_actions, Colors.red),
+                const SizedBox(width: 12),
+                _statChip("Completed", Icons.check_circle, Colors.green),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // Entries List
+          Expanded(
+            child: Consumer<EntryProvider>(
+              builder: (context, provider, _) {
+                final entries = provider.getEntriesForDate(_selectedDate);
+                if (entries.isEmpty) {
+                  return const Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.work_off, size: 64, color: Colors.grey),
+                        SizedBox(height: 16),
+                        Text(
+                          "No work logged",
+                          style: TextStyle(fontSize: 18, color: Colors.grey),
+                        ),
+                        Text("Tap + to start tracking"),
+                      ],
+                    ),
+                  );
+                }
+                return ListView.builder(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  itemCount: entries.length,
+                  itemBuilder: (context, i) => EntryCard(entry: entries[i]),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDay(
+    DateTime day,
+    EntryProvider entryProvider,
+    TodoProvider todoProvider, {
+    bool isSelected = false,
+    bool isToday = false,
+  }) {
+    final hasWork = entryProvider.getEntriesForDate(day).isNotEmpty;
+    final pendingTodos = todoProvider
+        .getTodosForDate(day)
+        .where((t) => !t.isCompleted)
+        .toList();
+    final hasPendingTodo = pendingTodos.isNotEmpty;
+
+    return Container(
+      margin: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: hasPendingTodo
+            ? Colors.red.withOpacity(isSelected ? 0.3 : 0.15)
+            : (isToday ? Colors.indigo.withOpacity(0.2) : null),
+        borderRadius: BorderRadius.circular(12),
+        border: isSelected ? Border.all(color: Colors.indigo, width: 2) : null,
+      ),
+      child: Stack(
+        children: [
+          Center(
+            child: Text(
+              "${day.day}",
+              style: TextStyle(
+                fontWeight: isToday ? FontWeight.bold : FontWeight.normal,
+                color: isToday ? Colors.indigo : null,
               ),
             ),
           ),
-          Consumer<EntryProvider>(
-            builder: (context, provider, _) {
-              final entries = provider.getEntriesForDate(_selectedDate);
-              if (entries.isEmpty) {
-                return const SliverToBoxAdapter(child: _EmptyState());
-              }
-              return SliverPadding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                sliver: SliverList(
-                  delegate: SliverChildBuilderDelegate((context, i) {
-                    final entry = entries[i];
-                    return Dismissible(
-                      key: ValueKey(entry.id),
-                      direction: DismissDirection.endToStart,
-                      background: Container(
-                        color: Colors.red,
-                        alignment: Alignment.centerRight,
-                        padding: const EdgeInsets.only(right: 20),
-                        child: const Icon(Icons.delete, color: Colors.white),
-                      ),
-                      confirmDismiss: (_) => _showDeleteDialog(context, entry),
-                      onDismissed: (_) {
-                        provider.addEntry(
-                          entry.copyWith(id: null),
-                        ); // temp re-add for undo
-                        provider.loadEntries(); // refresh
-                      },
-                      child: InkWell(
-                        onTap: () => _showEditDialog(context, entry),
-                        child: EntryCard(entry: entry),
-                      ),
-                    );
-                  }, childCount: entries.length),
+          if (hasWork)
+            const Positioned(
+              top: 4,
+              right: 4,
+              child: Icon(Icons.circle, size: 8, color: Colors.indigo),
+            ),
+          if (hasPendingTodo)
+            Positioned(
+              bottom: 4,
+              left: 4,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.red,
+                  borderRadius: BorderRadius.circular(8),
                 ),
-              );
-            },
-          ),
-          const SliverToBoxAdapter(child: SizedBox(height: 80)),
+                child: Text(
+                  "${pendingTodos.length}",
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
         ],
-      ),
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: Colors.indigo,
-        child: const Icon(Icons.add, color: Colors.white),
-        onPressed: () => showDialog(
-          context: context,
-          builder: (_) => AddEntryDialog(date: _selectedDate),
-        ),
       ),
     );
   }
 
-  Future<bool> _showDeleteDialog(BuildContext context, WorkEntry entry) async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text("Delete Entry?"),
-        content: Text(
-          "Remove \"${entry.title}\" from ${_formatDate(entry.date)}?",
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text("Cancel"),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text("Delete", style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
-    );
-    if (confirm == true) {
-      await DatabaseHelper.instance.deleteEntry(entry.id!);
-      context.read<EntryProvider>().loadEntries();
-    }
-    return false;
-  }
-
-  void _showEditDialog(BuildContext context, WorkEntry entry) {
-    showDialog(
-      context: context,
-      builder: (_) => AddEntryDialog(date: entry.date, entryToEdit: entry),
-    );
-  }
-
-  String _formatDate(DateTime d) => '${d.day}/${d.month}/${d.year}';
-}
-
-class _EmptyState extends StatelessWidget {
-  const _EmptyState();
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(32),
-      child: Column(
-        children: [
-          Icon(Icons.note_add, size: 64, color: Colors.grey[400]),
-          const SizedBox(height: 16),
-          Text(
-            "No entries yet",
-            style: TextStyle(color: Colors.grey[600], fontSize: 16),
-          ),
-          const SizedBox(height: 8),
-          const Text("Tap + to add your first log"),
-        ],
-      ),
+  Widget _statChip(String label, IconData icon, Color color) {
+    return Chip(
+      label: Text(label, style: const TextStyle(fontSize: 12)),
+      avatar: Icon(icon, size: 16, color: color),
+      backgroundColor: color.withOpacity(0.1),
+      labelPadding: const EdgeInsets.symmetric(horizontal: 8),
     );
   }
 }

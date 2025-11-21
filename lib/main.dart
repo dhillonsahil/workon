@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:workon/providers/todo_provider.dart';
 import 'screens/home_screen.dart';
 import 'providers/entry_provider.dart';
 import 'providers/title_provider.dart';
@@ -13,9 +14,10 @@ void main() async {
       providers: [
         ChangeNotifierProvider(create: (_) => EntryProvider()),
         ChangeNotifierProvider(create: (_) => TitleProvider()),
+        ChangeNotifierProvider(create: (_) => StatsProvider()..loadStats()),
         ChangeNotifierProvider(
-          create: (_) => StatsProvider()..loadStats(),
-        ), // NOW VALID
+          create: (_) => TodoProvider()..loadTodos(),
+        ), // ← ADD THIS
       ],
       child: const MyApp(),
     ),
