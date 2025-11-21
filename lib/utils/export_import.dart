@@ -1,380 +1,186 @@
-// import 'dart:convert';
-// import 'dart:io';
-// import 'package:flutter/material.dart';
-// import 'package:file_picker/file_picker.dart';
-// import 'package:path_provider/path_provider.dart';
-// import 'package:permission_handler/permission_handler.dart';
-// import '../db/database_helper.dart';
-// import 'package:provider/provider.dart';
-// import '../providers/entry_provider.dart';
-// import '../providers/title_provider.dart';
-
-// class ExportImport {
-//   // EXPORT
-//   static Future<void> exportData(BuildContext context) async {
-//     try {
-//       // Try SAF first (no permission needed)
-//       final directoryPath = await FilePicker.platform.getDirectoryPath(
-//         dialogTitle: 'Choose export folder',
-//       );
-
-//       final db = await DatabaseHelper.instance.database;
-//       final entries = await db.query('entries');
-//       final titles = await db.query('work_titles');
-//       final tags = await db.query('tags');
-
-//       final data = {
-//         'entries': entries,
-//         'work_titles': titles,
-//         'tags': tags,
-//         'exported_at': DateTime.now().toIso8601String(),
-//       };
-
-//       final jsonString = jsonEncode(data);
-//       final fileName =
-//           await _promptFileName(context) ??
-//           'workon_export_${_timestamp()}.json';
-
-//       String filePath;
-
-//       if (directoryPath != null) {
-//         filePath = '$directoryPath/$fileName';
-//       } else {
-//         // Fallback: request permission + use external storage
-//         if (!await _requestPermission(context)) {
-//           _showSnackBar(context, "Permission denied.");
-//           return;
-//         }
-//         final dir = await getExternalStorageDirectory();
-//         if (dir == null) {
-//           _showSnackBar(context, "Could not access storage.");
-//           return;
-//         }
-//         filePath = '${dir.path}/$fileName';
-//       }
-
-//       final file = File(filePath);
-//       await file.writeAsString(jsonString);
-
-//       _showSnackBar(context, "Exported to:\n$filePath", isSuccess: true);
-//     } catch (e) {
-//       _showSnackBar(context, "Export failed: $e");
-//     }
-//   }
-
-//   // IMPORT
-//   static Future<void> importData(BuildContext context) async {
-//     try {
-//       final result = await FilePicker.platform.pickFiles(
-//         type: FileType.custom,
-//         allowedExtensions: ['json'],
-//         dialogTitle: 'Select WorkOn Export File',
-//       );
-
-//       if (result == null || result.files.isEmpty) {
-//         _showSnackBar(context, "Import cancelled");
-//         return;
-//       }
-
-//       final file = File(result.files.single.path!);
-//       final jsonString = await file.readAsString();
-//       final data = jsonDecode(jsonString) as Map<String, dynamic>;
-
-//       final db = await DatabaseHelper.instance.database;
-//       final batch = db.batch();
-//       batch.delete('entries');
-//       batch.delete('work_titles');
-//       batch.delete('tags');
-//       for (final e in data['entries'] ?? []) batch.insert('entries', e);
-//       for (final t in data['work_titles'] ?? []) batch.insert('work_titles', t);
-//       for (final g in data['tags'] ?? []) batch.insert('tags', g);
-//       await batch.commit(noResult: true);
-
-//       Future.microtask(() {
-//         Provider.of<EntryProvider>(context, listen: false).loadEntries();
-//         Provider.of<TitleProvider>(context, listen: false).loadTitles();
-//       });
-
-//       _showSnackBar(context, "Imported successfully!", isSuccess: true);
-//     } catch (e) {
-//       _showSnackBar(context, "Import failed: $e");
-//     }
-//   }
-
-//   // PERMISSION
-//   static Future<bool> _requestPermission(BuildContext context) async {
-//     var status = await Permission.storage.status;
-//     if (!status.isGranted) {
-//       status = await Permission.storage.request();
-//     }
-//     return status.isGranted;
-//   }
-
-//   // PROMPT FILE NAME
-//   static Future<String?> _promptFileName(BuildContext context) async {
-//     final controller = TextEditingController(
-//       text: 'workon_export_${_timestamp()}.json',
-//     );
-//     return showDialog<String>(
-//       context: context,
-//       builder: (ctx) => AlertDialog(
-//         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-//         title: const Text("Export File Name"),
-//         content: TextField(
-//           controller: controller,
-//           decoration: const InputDecoration(
-//             hintText: "e.g. my_data.json",
-//             border: OutlineInputBorder(),
-//           ),
-//         ),
-//         actions: [
-//           TextButton(
-//             onPressed: () => Navigator.pop(ctx),
-//             child: const Text("Cancel"),
-//           ),
-//           ElevatedButton(
-//             onPressed: () {
-//               var name = controller.text.trim();
-//               if (name.isEmpty) return;
-//               if (!name.endsWith('.json')) name = '$name.json';
-//               Navigator.pop(ctx, name);
-//             },
-//             child: const Text("Export"),
-//           ),
-//         ],
-//       ),
-//     );
-//   }
-
-//   // SNACKBAR
-//   static void _showSnackBar(
-//     BuildContext context,
-//     String message, {
-//     bool isSuccess = false,
-//   }) {
-//     if (!context.mounted) return;
-//     ScaffoldMessenger.of(context).showSnackBar(
-//       SnackBar(
-//         content: Text(message),
-//         backgroundColor: isSuccess ? Colors.green[700] : Colors.red[700],
-//         behavior: SnackBarBehavior.floating,
-//         duration: const Duration(seconds: 5),
-//       ),
-//     );
-//   }
-
-//   // TIMESTAMP
-//   static String _timestamp() {
-//     final now = DateTime.now();
-//     return '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}_${now.hour}${now.minute}';
-//   }
-// }
-
+// lib/utils/export_import.dart
 import 'dart:convert';
-import 'dart:io';
-import 'package:flutter/material.dart';
+import 'package:csv/csv.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:permission_handler/permission_handler.dart';
-import 'package:sqflite/sqflite.dart';
-import '../db/database_helper.dart';
+import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../providers/entry_provider.dart';
-import '../providers/title_provider.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:workon/db/database_helper.dart';
+import 'package:workon/providers/entry_provider.dart';
+import 'package:workon/providers/todo_provider.dart';
 
 class ExportImport {
-  // EXPORT
+  // EXPORT — uses current entries & todos from providers (must be called inside widget tree)
   static Future<void> exportData(BuildContext context) async {
     try {
-      final db = await DatabaseHelper.instance.database;
+      final entryProvider = Provider.of<EntryProvider>(context, listen: false);
+      final todoProvider = Provider.of<TodoProvider>(context, listen: false);
 
-      // Fetch all data with proper tables
-      final entries = await db.query('entries');
-      final workTitles = await db.query('work_titles');
-      final tags = await db.query('tags');
+      final entries = entryProvider.entries;
+      final todos = todoProvider.todos;
 
-      final exportData = {
-        'entries': entries,
-        'work_titles': workTitles,
-        'tags': tags,
-        'exported_at': DateTime.now().toIso8601String(),
-        'version': 2, // For future compatibility
-      };
+      final data = [
+        [
+          'Type',
+          'Title',
+          'Description',
+          'Tag',
+          'Date',
+          'Hours',
+          'Minutes',
+          'Priority',
+          'Completed',
+          'Time Taken',
+        ],
+        ...entries.map(
+          (e) => [
+            'Work',
+            e.title,
+            e.description ?? '',
+            e.tag ?? '',
+            '${e.date.day}/${e.date.month}/${e.date.year}',
+            e.hours,
+            e.minutes,
+            '',
+            '',
+            '',
+          ],
+        ),
+        ...todos.map(
+          (t) => [
+            'Todo',
+            t.title,
+            t.description ?? '',
+            t.tag ?? '',
+            '${t.dueDate.day}/${t.dueDate.month}/${t.dueDate.year}',
+            '',
+            '',
+            t.priority,
+            t.isCompleted ? 'Yes' : 'No',
+            t.timeTakenMinutes?.toString() ?? '',
+          ],
+        ),
+      ];
 
-      final jsonString = jsonEncode(exportData);
-
-      // Prompt filename
+      final csv = const ListToCsvConverter().convert(data);
       final fileName =
-          await _promptFileName(context) ??
-          'workon_export_${_timestamp()}.json';
-
-      // Let user pick folder (SAF - no permission needed)
-      final directoryPath = await FilePicker.platform.getDirectoryPath(
-        dialogTitle: 'Choose Export Folder',
+          'workon_export_${DateTime.now().millisecondsSinceEpoch}.csv';
+      final xfile = XFile.fromData(
+        utf8.encode(csv),
+        mimeType: 'text/csv',
+        name: fileName,
       );
 
-      String filePath;
-
-      if (directoryPath != null) {
-        filePath = '$directoryPath/$fileName';
-      } else {
-        // Fallback: use app-specific external storage
-        if (!await _requestPermission(context)) {
-          _showSnackBar(context, "Permission denied. Using app folder.");
-          final dir = await getApplicationDocumentsDirectory();
-          filePath = '${dir.path}/$fileName';
-        } else {
-          final dir = await getExternalStorageDirectory();
-          if (dir == null) {
-            _showSnackBar(context, "Storage unavailable. Using app folder.");
-            final appDir = await getApplicationDocumentsDirectory();
-            filePath = '${appDir.path}/$fileName';
-          } else {
-            filePath = '${dir.path}/$fileName';
-          }
-        }
-      }
-
-      final file = File(filePath);
-      await file.writeAsString(jsonString);
-
-      _showSnackBar(
-        context,
-        "Exported successfully!\n$filePath",
-        isSuccess: true,
-      );
+      await Share.shareXFiles([xfile], text: 'My WorkOn Data Export');
     } catch (e) {
-      _showSnackBar(context, "Export failed: $e");
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Export failed: $e"),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
-  // IMPORT
+  // IMPORT — Full CSV import with reload
   static Future<void> importData(BuildContext context) async {
     try {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
-        allowedExtensions: ['json'],
-        dialogTitle: 'Select WorkOn Backup File',
+        allowedExtensions: ['csv'],
+        dialogTitle: 'Select WorkOn CSV Export',
       );
 
-      if (result == null || result.files.isEmpty) {
-        _showSnackBar(context, "Import cancelled");
+      if (result == null || result.files.isEmpty) return;
+
+      final bytes = result.files.single.bytes;
+      if (bytes == null) {
+        _showError(context, "Could not read file");
         return;
       }
 
-      final file = File(result.files.single.path!);
-      final jsonString = await file.readAsString();
-      final data = jsonDecode(jsonString) as Map<String, dynamic>;
+      final csvString = utf8.decode(bytes);
+      final rows = const CsvToListConverter().convert(csvString);
+
+      if (rows.isEmpty || rows[0][0] != 'Type') {
+        _showError(context, "Invalid CSV format");
+        return;
+      }
 
       final db = await DatabaseHelper.instance.database;
       final batch = db.batch();
 
       // Clear existing data
       await db.delete('entries');
-      await db.delete('work_titles');
-      await db.delete('tags');
+      await db.delete('todos');
 
-      // Insert new data
-      for (final e in data['entries'] ?? []) {
-        await db.insert(
-          'entries',
-          e,
-          conflictAlgorithm: ConflictAlgorithm.replace,
-        );
-      }
-      for (final t in data['work_titles'] ?? []) {
-        await db.insert(
-          'work_titles',
-          t,
-          conflictAlgorithm: ConflictAlgorithm.replace,
-        );
-      }
-      for (final g in data['tags'] ?? []) {
-        await db.insert(
-          'tags',
-          g,
-          conflictAlgorithm: ConflictAlgorithm.replace,
-        );
+      for (int i = 1; i < rows.length; i++) {
+        final row = rows[i];
+        final type = row[0].toString();
+
+        if (type == 'Work') {
+          final dateParts = row[4].toString().split('/');
+          batch.insert('entries', {
+            'title': row[1],
+            'description': row[2].toString().isNotEmpty ? row[2] : null,
+            'tag': row[3].toString().isNotEmpty ? row[3] : null,
+            'date': DateTime(
+              int.parse(dateParts[2]),
+              int.parse(dateParts[1]),
+              int.parse(dateParts[0]),
+            ).millisecondsSinceEpoch,
+            'hours': int.tryParse(row[5].toString()) ?? 0,
+            'minutes': int.tryParse(row[6].toString()) ?? 0,
+          });
+        } else if (type == 'Todo') {
+          final dateParts = row[4].toString().split('/');
+          batch.insert('todos', {
+            'title': row[1],
+            'description': row[2].toString().isNotEmpty ? row[2] : null,
+            'tag': row[3].toString().isNotEmpty ? row[3] : null,
+            'priority': row[7],
+            'dueDate': DateTime(
+              int.parse(dateParts[2]),
+              int.parse(dateParts[1]),
+              int.parse(dateParts[0]),
+            ).millisecondsSinceEpoch,
+            'isCompleted': row[8] == 'Yes' ? 1 : 0,
+            'timeTakenMinutes': row[9].toString().isNotEmpty
+                ? int.tryParse(row[9].toString())
+                : null,
+            'createdAt': DateTime.now().millisecondsSinceEpoch,
+          });
+        }
       }
 
-      // Reload providers
-      Future.microtask(() {
+      await batch.commit(noResult: true);
+
+      // Reload data
+      if (context.mounted) {
         Provider.of<EntryProvider>(context, listen: false).loadEntries();
-        Provider.of<TitleProvider>(context, listen: false).loadTitles();
-      });
+        Provider.of<TodoProvider>(context, listen: false).loadTodos();
 
-      _showSnackBar(context, "Imported successfully!", isSuccess: true);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Import successful!"),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
     } catch (e) {
-      _showSnackBar(context, "Import failed: $e");
+      if (context.mounted) {
+        _showError(context, "Import failed: $e");
+      }
     }
   }
 
-  // PERMISSION (only for fallback)
-  static Future<bool> _requestPermission(BuildContext context) async {
-    var status = await Permission.storage.status;
-    if (!status.isGranted) {
-      status = await Permission.storage.request();
+  static void _showError(BuildContext context, String message) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message), backgroundColor: Colors.red),
+      );
     }
-    return status.isGranted;
-  }
-
-  // PROMPT FILE NAME
-  static Future<String?> _promptFileName(BuildContext context) async {
-    final controller = TextEditingController(
-      text: 'workon_export_${_timestamp()}.json',
-    );
-
-    return showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text("Export File Name"),
-        content: TextField(
-          controller: controller,
-          decoration: const InputDecoration(
-            hintText: "e.g. my_backup.json",
-            border: OutlineInputBorder(),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text("Cancel"),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              var name = controller.text.trim();
-              if (name.isEmpty) return;
-              if (!name.endsWith('.json')) name = '$name.json';
-              Navigator.pop(ctx, name);
-            },
-            child: const Text("Export"),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // SNACKBAR
-  static void _showSnackBar(
-    BuildContext context,
-    String message, {
-    bool isSuccess = false,
-  }) {
-    if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: isSuccess ? Colors.green[700] : Colors.red[700],
-        behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 6),
-      ),
-    );
-  }
-
-  // TIMESTAMP
-  static String _timestamp() {
-    final now = DateTime.now();
-    return '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}_${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}';
   }
 }

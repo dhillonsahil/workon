@@ -46,9 +46,11 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  // lib/screens/home_screen.dart
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      extendBody: true, // ← THIS IS THE MAGIC LINE
       body: IndexedStack(index: _currentIndex, children: _screens),
       bottomNavigationBar: CurvedBottomNav(
         currentIndex: _currentIndex,

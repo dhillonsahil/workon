@@ -15,49 +15,60 @@ class CurvedBottomNav extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // This makes the nav bar respect the gesture/home bar
+    final bottomPadding = MediaQuery.of(context).padding.bottom;
+
     return SizedBox(
-      height: 90,
+      height: 90 + bottomPadding, // Extra space for gesture bar
       child: Stack(
+        clipBehavior: Clip.none,
         alignment: Alignment.topCenter,
         children: [
-          // Background curve
+          // Curved background
           Positioned(
             bottom: 0,
             left: 0,
             right: 0,
             child: CustomPaint(
               painter: _NavBarPainter(),
-              child: const SizedBox(height: 70),
+              child: SizedBox(
+                height: 80 + bottomPadding,
+                width: MediaQuery.of(context).size.width,
+              ),
             ),
           ),
 
-          // Center FAB
+          // FAB — Raised higher & safe
           Positioned(
             top: 0,
-            child: Container(
-              width: 62,
-              height: 62,
-              decoration: BoxDecoration(
-                color: const Color(0xFFF7E7C8),
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.2),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: IconButton(
-                icon: const Icon(Icons.add, color: Colors.black, size: 32),
-                onPressed: onFabPressed,
+            child: Transform.translate(
+              offset: const Offset(0, -12), // Pulls it up more
+              child: Container(
+                width: 68,
+                height: 68,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF7E7C8),
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.3),
+                      blurRadius: 15,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
+                  border: Border.all(color: Colors.white, width: 4),
+                ),
+                child: IconButton(
+                  icon: const Icon(Icons.add, color: Colors.black87, size: 36),
+                  onPressed: onFabPressed,
+                ),
               ),
             ),
           ),
 
-          // Bottom Icons
+          // Bottom Icons Row
           Positioned(
-            bottom: 18,
+            bottom: 22 + bottomPadding / 2, // Perfectly above gesture bar
             left: 0,
             right: 0,
             child: Row(
@@ -65,7 +76,7 @@ class CurvedBottomNav extends StatelessWidget {
               children: [
                 _buildIcon(Icons.home_rounded, 0),
                 _buildIcon(Icons.checklist_rounded, 1),
-                const SizedBox(width: 60), // FAB space
+                const SizedBox(width: 80), // FAB space
                 _buildIcon(Icons.bar_chart_rounded, 2),
                 _buildIcon(Icons.settings_rounded, 3),
               ],
@@ -81,18 +92,22 @@ class CurvedBottomNav extends StatelessWidget {
     return GestureDetector(
       onTap: () => onTap(index),
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.all(8),
-        decoration: isSelected
-            ? BoxDecoration(
-                color: Colors.white.withOpacity(0.2),
-                shape: BoxShape.circle,
-              )
-            : null,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOutCubic,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? Colors.white.withOpacity(0.25)
+              : Colors.transparent,
+          shape: BoxShape.circle,
+          border: isSelected
+              ? Border.all(color: Colors.white.withOpacity(0.4), width: 2)
+              : null,
+        ),
         child: Icon(
           icon,
-          size: 28,
-          color: isSelected ? Colors.white : Colors.grey.shade500,
+          size: 30,
+          color: isSelected ? Colors.white : Colors.grey.shade400,
         ),
       ),
     );
@@ -107,23 +122,32 @@ class _NavBarPainter extends CustomPainter {
       ..style = PaintingStyle.fill;
 
     final path = Path()
-      ..moveTo(0, 20)
-      ..quadraticBezierTo(0, 0, 25, 0)
-      ..lineTo(size.width * 0.33 - 35, 0)
-      ..quadraticBezierTo(size.width * 0.33, 0, size.width * 0.33 + 10, 20)
-      ..arcToPoint(
-        Offset(size.width * 0.66 - 10, 20),
-        radius: const Radius.circular(40),
-        clockwise: false,
+      ..moveTo(0, 25)
+      ..quadraticBezierTo(0, 0, 30, 0)
+      ..lineTo(size.width * 0.35 - 40, 0)
+      ..cubicTo(
+        size.width * 0.35 - 10,
+        0,
+        size.width * 0.35 + 10,
+        20,
+        size.width * 0.5,
+        20,
       )
-      ..quadraticBezierTo(size.width * 0.66, 0, size.width * 0.66 + 35, 0)
-      ..lineTo(size.width - 25, 0)
-      ..quadraticBezierTo(size.width, 0, size.width, 20)
+      ..cubicTo(
+        size.width * 0.65 - 10,
+        20,
+        size.width * 0.65 + 10,
+        0,
+        size.width * 0.65 + 40,
+        0,
+      )
+      ..lineTo(size.width - 30, 0)
+      ..quadraticBezierTo(size.width, 0, size.width, 25)
       ..lineTo(size.width, size.height)
       ..lineTo(0, size.height)
       ..close();
 
-    canvas.drawShadow(path, Colors.black, 8, false);
+    canvas.drawShadow(path, Colors.black.withOpacity(0.6), 12, false);
     canvas.drawPath(path, paint);
   }
 

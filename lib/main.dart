@@ -1,44 +1,63 @@
+// lib/main.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:workon/providers/entry_provider.dart';
+import 'package:workon/providers/title_provider.dart';
+import 'package:workon/providers/stats_provider.dart';
 import 'package:workon/providers/todo_provider.dart';
-import 'screens/home_screen.dart';
-import 'providers/entry_provider.dart';
-import 'providers/title_provider.dart';
-import 'providers/stats_provider.dart'; // ADD THIS LINE
+import 'package:workon/providers/theme_provider.dart';
+import 'package:workon/screens/home_screen.dart';
+import 'package:workon/screens/settings_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
-  runApp(
-    MultiProvider(
-      providers: [
-        ChangeNotifierProvider(create: (_) => EntryProvider()),
-        ChangeNotifierProvider(create: (_) => TitleProvider()),
-        ChangeNotifierProvider(create: (_) => StatsProvider()..loadStats()),
-        ChangeNotifierProvider(
-          create: (_) => TodoProvider()..loadTodos(),
-        ), // ← ADD THIS
-      ],
-      child: const MyApp(),
-    ),
-  );
+  runApp(const WorkonApp());
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class WorkonApp extends StatelessWidget {
+  const WorkonApp({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'WorkOn',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        primarySwatch: Colors.indigo,
-        useMaterial3: true,
-        fontFamily: 'Roboto',
-        scaffoldBackgroundColor: Colors.grey[50],
-      ),
-      home: const HomeScreen(),
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => ThemeProvider()),
+        ChangeNotifierProvider(create: (_) => EntryProvider()..loadEntries()),
+        ChangeNotifierProvider(create: (_) => TitleProvider()..loadTitles()),
+        ChangeNotifierProvider(create: (_) => StatsProvider()..loadStats()),
+        ChangeNotifierProvider(create: (_) => TodoProvider()..loadTodos()),
+      ],
+      builder: (context, child) {
+        final themeProvider = context.watch<ThemeProvider>();
+        return MaterialApp(
+          title: 'WorkOn',
+          debugShowCheckedModeBanner: false,
+          theme: ThemeData(
+            colorScheme: ColorScheme.fromSeed(
+              seedColor: Colors.indigo,
+              brightness: Brightness.light,
+            ),
+            useMaterial3: true,
+            fontFamily: 'Poppins',
+          ),
+          darkTheme: ThemeData(
+            colorScheme: ColorScheme.fromSeed(
+              seedColor: Colors.indigo,
+              brightness: Brightness.dark,
+            ),
+            useMaterial3: true,
+            scaffoldBackgroundColor: const Color(0xFF121212),
+            cardColor: const Color(0xFF1E1E1E),
+            fontFamily: 'Poppins',
+          ),
+          themeMode: themeProvider.isDark ? ThemeMode.dark : ThemeMode.light,
+          home: const HomeScreen(),
+          routes: {
+            '/settings': (_) => const SettingsScreen(),
+            // '/titles' route removed — we access it from DailyProgressTab directly
+          },
+        );
+      },
     );
   }
 }
