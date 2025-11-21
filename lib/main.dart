@@ -8,6 +8,7 @@ import 'package:workon/providers/todo_provider.dart';
 import 'package:workon/providers/theme_provider.dart';
 import 'package:workon/screens/home_screen.dart';
 import 'package:workon/screens/settings_screen.dart';
+import 'package:workon/screens/titles_tags_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -54,7 +55,7 @@ class WorkonApp extends StatelessWidget {
           home: const HomeScreen(),
           routes: {
             '/settings': (_) => const SettingsScreen(),
-            // '/titles' route removed — we access it from DailyProgressTab directly
+            '/titles': (_) => const TitlesTagsScreen(),
           },
         );
       },
